@@ -23,7 +23,7 @@ class CControllerUserMigrateView extends CController {
     protected function doAction(): void {
         // Busca todos os usuários para popular os selects
         $users = DBfetchArray(DBselect(
-            'SELECT userid, username, name, surname, gui_access' .
+            'SELECT userid, username, name, surname' .
             ' FROM users' .
             ' ORDER BY username ASC'
         ));

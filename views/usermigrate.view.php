@@ -7,7 +7,6 @@
  * @var array $data['user_data'] Dados do usuário logado
  */
 
-$this->includeJsFile('usermigrate.view.js');
 ?>
 <div class="zbx-migrate-wrap">
 
@@ -265,3 +264,5 @@ $this->includeJsFile('usermigrate.view.js');
     font-size: 13px;
 }
 </style>
+
+<script src="modules/zbx-user-migrate/assets/js/usermigrate.js?v=1.0"></script>
