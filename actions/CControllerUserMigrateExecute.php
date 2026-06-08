@@ -44,18 +44,36 @@ class CControllerUserMigrateExecute extends CController {
             return;
         }
 
-        // Valida existência de ambos os usuários
         $user_src = DBfetch(DBselect(
-            'SELECT userid, username FROM users WHERE userid=' . zbx_dbstr($src)
+            'SELECT u.userid, u.username, u.roleid, r.name AS rolename' .
+            ' FROM users u' .
+            ' LEFT JOIN role r ON r.roleid = u.roleid' .
+            ' WHERE u.userid=' . zbx_dbstr($src)
         ));
         $user_dst = DBfetch(DBselect(
-            'SELECT userid, username FROM users WHERE userid=' . zbx_dbstr($dst)
+            'SELECT u.userid, u.username, u.roleid, r.name AS rolename' .
+            ' FROM users u' .
+            ' LEFT JOIN role r ON r.roleid = u.roleid' .
+            ' WHERE u.userid=' . zbx_dbstr($dst)
         ));
 
         if (!$user_src || !$user_dst) {
             $this->setResponse(new CControllerResponseData([
                 'main_block' => json_encode([
                     'error' => ['title' => 'Usuário não encontrado.']
+                ])
+            ]));
+            return;
+        }
+
+        // Bloqueia migração do usuário Admin nativo (userid=1)
+        if ((int)$src === 1) {
+            $this->setResponse(new CControllerResponseData([
+                'main_block' => json_encode([
+                    'error' => [
+                        'title'    => 'Operação não permitida.',
+                        'messages' => ['O usuário Admin nativo (ID 1) não pode ser migrado.']
+                    ]
                 ])
             ]));
             return;
@@ -68,66 +86,75 @@ class CControllerUserMigrateExecute extends CController {
 
         try {
             // ── 1. Dashboards (ownership) ───────────────────────────────────
-            $count = $this->migrateSimple('dashboard', 'userid', 'templateid IS NULL', $src, $dst);
+            $count = $this->migrateSimple('dashboard', 'userid',
+                'templateid IS NULL AND userid=' . zbx_dbstr($src), $dst);
             if ($count > 0) $migrated[] = "{$count} dashboard(s)";
 
-            // ── 2. Dashboard (permissões) ───────────────────────────────────
-            // Evita duplicatas: remove permissão do src em dashboards onde dst já tem acesso
+            // ── 2. Dashboard (permissoes) — evita duplicatas via JOIN ────────
             DBexecute(
-                'DELETE FROM dashboard_user' .
-                ' WHERE userid=' . zbx_dbstr($src) .
-                ' AND dashboardid IN (' .
-                '   SELECT dashboardid FROM dashboard_user WHERE userid=' . zbx_dbstr($dst) .
-                ' )'
+                'DELETE du FROM dashboard_user du' .
+                ' INNER JOIN dashboard_user du2 ON du2.dashboardid = du.dashboardid' .
+                '   AND du2.userid = ' . zbx_dbstr($dst) .
+                ' WHERE du.userid = ' . zbx_dbstr($src)
             );
-            $count = $this->migrateSimple('dashboard_user', 'userid', null, $src, $dst);
+            $count = $this->migrateSimple('dashboard_user', 'userid',
+                'userid=' . zbx_dbstr($src), $dst);
             if ($count > 0) $migrated[] = "{$count} permissão(ões) de dashboard";
 
             // ── 3. Mapas de rede (ownership) ───────────────────────────────
-            $count = $this->migrateSimple('sysmaps', 'userid', null, $src, $dst);
+            $count = $this->migrateSimple('sysmaps', 'userid',
+                'userid=' . zbx_dbstr($src), $dst);
             if ($count > 0) $migrated[] = "{$count} mapa(s) de rede";
 
-            // ── 4. Mapas de rede (permissões) ──────────────────────────────
+            // ── 4. Mapas de rede (permissoes) — evita duplicatas via JOIN ───
             DBexecute(
-                'DELETE FROM sysmap_user' .
-                ' WHERE userid=' . zbx_dbstr($src) .
-                ' AND sysmapid IN (' .
-                '   SELECT sysmapid FROM sysmap_user WHERE userid=' . zbx_dbstr($dst) .
-                ' )'
+                'DELETE su FROM sysmap_user su' .
+                ' INNER JOIN sysmap_user su2 ON su2.sysmapid = su.sysmapid' .
+                '   AND su2.userid = ' . zbx_dbstr($dst) .
+                ' WHERE su.userid = ' . zbx_dbstr($src)
             );
-            $count = $this->migrateSimple('sysmap_user', 'userid', null, $src, $dst);
+            $count = $this->migrateSimple('sysmap_user', 'userid',
+                'userid=' . zbx_dbstr($src), $dst);
             if ($count > 0) $migrated[] = "{$count} permissão(ões) de mapa";
 
-            // ── 5. Relatórios ───────────────────────────────────────────────
-            $count = $this->migrateSimple('report', 'userid', null, $src, $dst);
+            // ── 5. Relatorios ───────────────────────────────────────────────
+            $count = $this->migrateSimple('report', 'userid',
+                'userid=' . zbx_dbstr($src), $dst);
             if ($count > 0) $migrated[] = "{$count} relatório(s) agendado(s)";
 
-            // ── 6. Relatórios (destinatários) ───────────────────────────────
+            // ── 6. Relatorios (destinatarios) — evita duplicatas via JOIN ───
             DBexecute(
-                'DELETE FROM report_user' .
-                ' WHERE userid=' . zbx_dbstr($src) .
-                ' AND reportid IN (' .
-                '   SELECT reportid FROM report_user WHERE userid=' . zbx_dbstr($dst) .
-                ' )'
+                'DELETE ru FROM report_user ru' .
+                ' INNER JOIN report_user ru2 ON ru2.reportid = ru.reportid' .
+                '   AND ru2.userid = ' . zbx_dbstr($dst) .
+                ' WHERE ru.userid = ' . zbx_dbstr($src)
             );
-            $count = $this->migrateSimple('report_user', 'userid', null, $src, $dst);
+            $count = $this->migrateSimple('report_user', 'userid',
+                'userid=' . zbx_dbstr($src), $dst);
             if ($count > 0) $migrated[] = "{$count} destinatário(s) de relatório";
 
-            // ── 7. Mídias de notificação ────────────────────────────────────
-            $count = $this->migrateSimple('media', 'userid', null, $src, $dst);
+            // ── 7. Midias de notificacao ────────────────────────────────────
+            $count = $this->migrateSimple('media', 'userid',
+                'userid=' . zbx_dbstr($src), $dst);
             if ($count > 0) $migrated[] = "{$count} mídia(s) de notificação";
 
             // ── 8. Action operations ────────────────────────────────────────
-            $count = $this->migrateSimple('opmessage_usr', 'userid', null, $src, $dst);
+            $count = $this->migrateSimple('opmessage_usr', 'userid',
+                'userid=' . zbx_dbstr($src), $dst);
             if ($count > 0) $migrated[] = "{$count} destinatário(s) de action";
 
             // ── 9. API Tokens ───────────────────────────────────────────────
-            $count = $this->migrateSimple('token', 'userid', null, $src, $dst);
+            $count = $this->migrateSimple('token', 'userid',
+                'userid=' . zbx_dbstr($src), $dst);
             if ($count > 0) $migrated[] = "{$count} token(s) de API";
 
-            // ── 10. Grupos — INSERT dos que o destino ainda não tem ─────────
+            // ── 10. Grupos — INSERT apenas dos que o destino nao tem ────────
+            // id em users_groups NAO e auto_increment — gera manualmente
             $src_groups = DBfetchArray(DBselect(
-                'SELECT usrgrpid FROM users_groups WHERE userid=' . zbx_dbstr($src)
+                'SELECT ug.id, ug.usrgrpid, g.name' .
+                ' FROM users_groups ug' .
+                ' JOIN usrgrp g ON g.usrgrpid = ug.usrgrpid' .
+                ' WHERE ug.userid=' . zbx_dbstr($src)
             ));
             $dst_groups = DBfetchArray(DBselect(
                 'SELECT usrgrpid FROM users_groups WHERE userid=' . zbx_dbstr($dst)
@@ -137,16 +164,21 @@ class CControllerUserMigrateExecute extends CController {
 
             foreach ($src_groups as $g) {
                 if (!in_array($g['usrgrpid'], $dst_gids)) {
+                    // Gera novo id seguro para users_groups
+                    $max_row = DBfetch(DBselect('SELECT MAX(id) AS maxid FROM users_groups'));
+                    $new_id  = (int)($max_row['maxid'] ?? 0) + 1;
+
                     DBexecute(
-                        'INSERT INTO users_groups (userid, usrgrpid)' .
-                        ' VALUES (' . zbx_dbstr($dst) . ',' . zbx_dbstr($g['usrgrpid']) . ')'
+                        'INSERT INTO users_groups (id, userid, usrgrpid)' .
+                        ' VALUES (' . zbx_dbstr($new_id) . ',' .
+                        zbx_dbstr($dst) . ',' . zbx_dbstr($g['usrgrpid']) . ')'
                     );
                     $added_groups++;
                 }
             }
             if ($added_groups > 0) $migrated[] = "{$added_groups} grupo(s) de usuário";
 
-            // ── 11. Preferências de interface (apenas as que o dst não tem) ─
+            // ── 11. Preferencias de interface ───────────────────────────────
             $dst_profiles = DBfetchArray(DBselect(
                 'SELECT idx FROM profiles WHERE userid=' . zbx_dbstr($dst)
             ));
@@ -168,17 +200,22 @@ class CControllerUserMigrateExecute extends CController {
             }
             if ($added_profiles > 0) $migrated[] = "{$added_profiles} preferência(s) de interface";
 
-            // ── 12. Plantão — Phones ────────────────────────────────────────
+            // ── 12. Plantao — Phones ────────────────────────────────────────
             if ($this->tableExists('module_plantao_phones')) {
-                $count = $this->migrateSimple('module_plantao_phones', 'userid', null, $src, $dst);
+                $count = $this->migrateSimple('module_plantao_phones', 'userid',
+                    'userid=' . zbx_dbstr($src), $dst);
                 if ($count > 0) $migrated[] = "{$count} telefone(s) de plantão";
             }
 
-            // ── 13. Plantão — Schedule ──────────────────────────────────────
+            // ── 13. Plantao — Schedule ──────────────────────────────────────
             if ($this->tableExists('module_plantao_schedule')) {
-                $count = $this->migrateSimple('module_plantao_schedule', 'userid', null, $src, $dst);
+                $count = $this->migrateSimple('module_plantao_schedule', 'userid',
+                    'userid=' . zbx_dbstr($src), $dst);
                 if ($count > 0) $migrated[] = "{$count} escala(s) de plantão";
             }
+
+            // ── Auditoria no formato nativo do Zabbix ───────────────────────
+            $this->writeAuditLog($src, $dst, $user_src, $user_dst, $migrated);
 
             DBcommit();
 
@@ -210,35 +247,94 @@ class CControllerUserMigrateExecute extends CController {
     }
 
     /**
-     * Executa UPDATE simples de userid em uma tabela.
-     * Retorna o número de linhas afetadas.
+     * UPDATE simples de userid em uma tabela.
+     * Retorna numero de linhas afetadas via SELECT COUNT antes do UPDATE.
      */
-    private function migrateSimple(
-        string $table,
-        string $field,
-        ?string $extra_where,
-        string $src,
-        string $dst
-    ): int {
-        $where = "{$field}=" . zbx_dbstr($src);
-        if ($extra_where) {
-            $where .= ' AND ' . $extra_where;
+    private function migrateSimple(string $table, string $field, string $where, string $dst): int {
+        // Conta antes para nao depender de ROW_COUNT() (MariaDB-only)
+        $count_row = DBfetch(DBselect("SELECT COUNT(*) AS cnt FROM {$table} WHERE {$where}"));
+        $count = (int)($count_row['cnt'] ?? 0);
+
+        if ($count > 0) {
+            DBexecute("UPDATE {$table} SET {$field}=" . zbx_dbstr($dst) . " WHERE {$where}");
         }
 
-        DBexecute("UPDATE {$table} SET {$field}=" . zbx_dbstr($dst) . " WHERE {$where}");
-
-        $result = DBfetch(DBselect("SELECT ROW_COUNT() as cnt"));
-        return (int)($result['cnt'] ?? 0);
+        return $count;
     }
 
     /**
-     * Verifica se uma tabela existe no banco zabbix.
+     * Verifica se uma tabela existe no banco.
      */
     private function tableExists(string $table): bool {
+        // Compativel com MySQL e MariaDB
+        // TABLE_SCHEMA dinamico via SELECT DATABASE() para nao hardcodar 'zabbix'
         $row = DBfetch(DBselect(
-            "SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.TABLES" .
-            " WHERE TABLE_SCHEMA='zabbix' AND TABLE_NAME=" . zbx_dbstr($table)
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES" .
+            " WHERE TABLE_SCHEMA = DATABASE()" .
+            " AND TABLE_NAME = " . zbx_dbstr($table)
         ));
         return $row && (int)$row['cnt'] > 0;
+    }
+
+    /**
+     * Registra a migracao no auditlog nativo do Zabbix.
+     *
+     * Formato do auditlog no Zabbix 7.0:
+     *   auditid      = varchar(25) — ID unico (timestamp + random)
+     *   userid       = ID do admin que executou
+     *   username     = username do admin
+     *   clock        = unix timestamp
+     *   ip           = IP do cliente
+     *   action       = 2 (AUDIT_ACTION_UPDATE)
+     *   resourcetype = 11 (AUDIT_RESOURCE_USER)
+     *   resourceid   = userid do usuario de origem
+     *   resourcename = username do usuario de origem
+     *   recordsetid  = mesmo auditid
+     *   details      = descricao da operacao
+     */
+    private function writeAuditLog(
+        string $src,
+        string $dst,
+        array $user_src,
+        array $user_dst,
+        array $migrated
+    ): void {
+        $auditid    = uniqid('', true);
+        $now        = time();
+        $ip         = $_SERVER['REMOTE_ADDR'] ?? '';
+        $admin_id   = CWebUser::$data['userid'];
+        $admin_name = CWebUser::$data['username'];
+
+        $summary = empty($migrated)
+            ? 'Nenhum objeto migrado.'
+            : implode(', ', $migrated);
+
+        $details = sprintf(
+            'User migration executed by %s. Source: %s (ID %s) -> Destination: %s (ID %s). Objects: %s',
+            $admin_name,
+            $user_src['username'], $src,
+            $user_dst['username'], $dst,
+            $summary
+        );
+
+        DBexecute(
+            'INSERT INTO auditlog' .
+            ' (auditid, userid, username, clock, ip, action, resourcetype,' .
+            '  resourceid, resource_cuid, resourcename, recordsetid, details)' .
+            ' VALUES (' .
+            zbx_dbstr($auditid) . ',' .
+            zbx_dbstr($admin_id) . ',' .
+            zbx_dbstr($admin_name) . ',' .
+            zbx_dbstr($now) . ',' .
+            zbx_dbstr($ip) . ',' .
+            '2,' .   // AUDIT_ACTION_UPDATE
+            '11,' .  // AUDIT_RESOURCE_USER
+            zbx_dbstr($src) . ',' .
+            zbx_dbstr('') . ',' .
+            zbx_dbstr($user_src['username']) . ',' .
+            zbx_dbstr($auditid) . ',' .
+            zbx_dbstr($details) .
+            ')'
+        );
     }
 }

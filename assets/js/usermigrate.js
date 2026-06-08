@@ -1,33 +1,48 @@
 /**
- * zbx-user-migrate — usermigrate.view.js
+ * zbx-user-migrate — usermigrate.js v1.2.0
  *
- * Gerencia toda a lógica de interação da página de migração:
- *   - Habilita botão "Verificar" quando ambos os selects têm valor
- *   - Chama usermigrate.preview e renderiza a tabela de preview
- *   - Chama usermigrate.execute após confirmação
- *   - Exibe resultado de sucesso ou erro
+ * - Badge de autenticacao dinamico por IdP
+ * - CSRF token enviado no execute
+ * - Avisos de Super Admin exibidos no preview
+ * - Confirmacao por digitacao de username antes de executar
  */
 
 (function () {
     'use strict';
 
-    const selSrc     = document.getElementById('userid_src');
-    const selDst     = document.getElementById('userid_dst');
-    const btnPreview = document.getElementById('btn-preview');
-    const btnExecute = document.getElementById('btn-execute');
-    const btnCancel  = document.getElementById('btn-cancel');
-    const divPreview = document.getElementById('zbx-migrate-preview');
-    const divHeader  = document.getElementById('zbx-migrate-preview-header');
-    const divBody    = document.getElementById('zbx-migrate-preview-body');
-    const divTotal   = document.getElementById('zbx-migrate-total');
-    const divResult  = document.getElementById('zbx-migrate-result');
+    const selSrc       = document.getElementById('userid_src');
+    const selDst       = document.getElementById('userid_dst');
+    const btnPreview   = document.getElementById('btn-preview');
+    const btnExecute   = document.getElementById('btn-execute');
+    const btnCancel    = document.getElementById('btn-cancel');
+    const divPreview   = document.getElementById('zbx-migrate-preview');
+    const divHeader    = document.getElementById('zbx-migrate-preview-header');
+    const divBody      = document.getElementById('zbx-migrate-preview-body');
+    const divTotal     = document.getElementById('zbx-migrate-total');
+    const divResult    = document.getElementById('zbx-migrate-result');
+    const srcBadgeWrap = document.getElementById('src-badge-wrap');
+    const dstBadgeWrap = document.getElementById('dst-badge-wrap');
+    const srcBadge     = document.getElementById('src-badge');
+    const dstBadge     = document.getElementById('dst-badge');
 
-    // ── Habilita botão Preview quando ambos os selects têm valor ────────────
+    // ── Badge de autenticacao ────────────────────────────────────────────────
+    function updateBadge(select, badgeEl, badgeWrap) {
+        const opt = select.options[select.selectedIndex];
+        if (!opt || !opt.value) { badgeWrap.style.display = 'none'; return; }
+
+        const label = opt.getAttribute('data-badge') || 'SYSTEM';
+        const cls   = opt.getAttribute('data-badge-class') || 'zbx-badge-system';
+        badgeEl.textContent = label;
+        badgeEl.className   = 'zbx-migrate-badge ' + cls;
+        badgeWrap.style.display = '';
+    }
+
     function syncPreviewButton() {
+        updateBadge(selSrc, srcBadge, srcBadgeWrap);
+        updateBadge(selDst, dstBadge, dstBadgeWrap);
+
         const ready = selSrc.value && selDst.value && selSrc.value !== selDst.value;
         btnPreview.disabled = !ready;
-
-        // Esconde preview anterior ao trocar seleção
         divPreview.style.display = 'none';
         divResult.style.display  = 'none';
     }
@@ -39,9 +54,9 @@
     function post(action, params) {
         const body = new URLSearchParams({ action, ...params });
         return fetch('zabbix.php', {
-            method: 'POST',
+            method:  'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: body.toString()
+            body:    body.toString()
         }).then(r => r.json());
     }
 
@@ -63,7 +78,6 @@
                 showResult('error', data.error.title, data.error.messages || []);
                 return;
             }
-
             renderPreview(data);
         })
         .catch(function (err) {
@@ -75,24 +89,34 @@
 
     // ── Renderiza preview ────────────────────────────────────────────────────
     function renderPreview(data) {
-        const srcName = data.user_src.username + (data.user_src.name ? ' (' + data.user_src.name + ' ' + data.user_src.surname + ')' : '');
-        const dstName = data.user_dst.username + (data.user_dst.name ? ' (' + data.user_dst.name + ' ' + data.user_dst.surname + ')' : '');
+        const srcName = formatUser(data.user_src);
+        const dstName = formatUser(data.user_dst);
+
+        // Guarda usernames para confirmacao na execucao
+        divPreview.dataset.srcUsername = data.user_src.username;
+        divPreview.dataset.dstUsername = data.user_dst.username;
 
         divHeader.innerHTML =
-            '<strong>' + escHtml(srcName) + '</strong>' +
-            ' &nbsp;→&nbsp; ' +
-            '<strong>' + escHtml(dstName) + '</strong>';
+            '<strong>' + escHtml(srcName) + '</strong> &nbsp;→&nbsp; <strong>' + escHtml(dstName) + '</strong>';
+
+        // Exibe avisos de Super Admin / Admin nativo
+        let warningsHtml = '';
+        if (data.warnings && data.warnings.length) {
+            warningsHtml = '<div class="zbx-migrate-warnings">' +
+                data.warnings.map(w => '<div class="zbx-migrate-warning">⚠ ' + escHtml(w) + '</div>').join('') +
+                '</div>';
+        }
 
         if (!data.preview || data.preview.length === 0) {
-            divBody.innerHTML = '<div class="zbx-migrate-empty">Nenhum objeto encontrado vinculado ao usuário de origem.</div>';
+            divBody.innerHTML = warningsHtml +
+                '<div class="zbx-migrate-empty">Nenhum objeto encontrado vinculado ao usuário de origem.</div>';
             divTotal.textContent = '0 objetos a migrar';
             btnExecute.style.display = 'none';
         } else {
-            divBody.innerHTML = data.preview.map(renderSection).join('');
+            divBody.innerHTML = warningsHtml + data.preview.map(renderSection).join('');
             divTotal.textContent = data.total + ' objeto(s) a migrar';
             btnExecute.style.display = '';
 
-            // Toggle de expansão das listas
             divBody.querySelectorAll('.zbx-migrate-section-header').forEach(function (hdr) {
                 hdr.addEventListener('click', function () {
                     const items = hdr.closest('.zbx-migrate-section').querySelector('.zbx-migrate-items');
@@ -107,20 +131,22 @@
         divPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
+    function formatUser(u) {
+        return u.username + ((u.name || u.surname) ? ' (' + (u.name + ' ' + u.surname).trim() + ')' : '');
+    }
+
     function renderSection(section) {
         const itemsHtml = section.items && section.items.length
-            ? '<div class="zbx-migrate-items">' +
-              '<ul>' + section.items.slice(0, 50).map(i => '<li>' + escHtml(String(i)) + '</li>').join('') +
+            ? '<div class="zbx-migrate-items"><ul>' +
+              section.items.slice(0, 50).map(i => '<li>' + escHtml(String(i)) + '</li>').join('') +
               (section.items.length > 50 ? '<li><em>...e mais ' + (section.items.length - 50) + ' itens</em></li>' : '') +
               '</ul></div>'
             : '';
 
         return '<div class="zbx-migrate-section">' +
             '<div class="zbx-migrate-section-header">' +
-                '<span class="zbx-migrate-section-title">' +
-                    escHtml(section.entity) +
-                    '<span class="zbx-migrate-count">' + section.count + '</span>' +
-                '</span>' +
+                '<span class="zbx-migrate-section-title">' + escHtml(section.entity) +
+                    '<span class="zbx-migrate-count">' + section.count + '</span></span>' +
                 (itemsHtml ? '<span class="zbx-migrate-toggle">▼ expandir</span>' : '') +
             '</div>' +
             '<div class="zbx-migrate-section-desc">' + escHtml(section.description) + '</div>' +
@@ -133,21 +159,25 @@
         divPreview.style.display = 'none';
     });
 
-    // ── Executar migração ────────────────────────────────────────────────────
+    // ── Executar migracao ────────────────────────────────────────────────────
     btnExecute.addEventListener('click', function () {
-        const srcLabel = selSrc.options[selSrc.selectedIndex].text;
-        const dstLabel = selDst.options[selDst.selectedIndex].text;
+        const srcUsername = divPreview.dataset.srcUsername || '';
+        const dstUsername = divPreview.dataset.dstUsername || '';
 
-        const confirmed = confirm(
-            'CONFIRMAR MIGRAÇÃO\n\n' +
-            'Origem:  ' + srcLabel + '\n' +
-            'Destino: ' + dstLabel + '\n\n' +
-            'Esta operação é irreversível. Todos os objetos listados serão\n' +
-            'transferidos para o usuário destino.\n\n' +
-            'Deseja continuar?'
+        // Confirmacao por digitacao do username de origem
+        const typed = prompt(
+            'Para confirmar a migração, digite o username do usuário de ORIGEM:\n\n' +
+            'Origem:  ' + srcUsername + '\n' +
+            'Destino: ' + dstUsername + '\n\n' +
+            'Esta operação é irreversível.'
         );
 
-        if (!confirmed) return;
+        if (typed === null) return; // cancelou
+
+        if (typed.trim() !== srcUsername) {
+            showResult('error', 'Confirmação incorreta.', ['O username digitado não corresponde ao usuário de origem.']);
+            return;
+        }
 
         btnExecute.disabled = true;
         btnExecute.textContent = 'Migrando...';
@@ -167,9 +197,10 @@
                 showResult('error', data.error.title, data.error.messages || []);
             } else {
                 showResult('success', data.success.title, data.success.messages || []);
-                // Reseta os selects
                 selSrc.value = '';
                 selDst.value = '';
+                srcBadgeWrap.style.display = 'none';
+                dstBadgeWrap.style.display = 'none';
                 syncPreviewButton();
             }
         })
@@ -181,25 +212,21 @@
         });
     });
 
-    // ── Exibe resultado ──────────────────────────────────────────────────────
+    // ── Resultado ────────────────────────────────────────────────────────────
     function showResult(type, title, messages) {
-        const cls = type === 'success' ? 'zbx-migrate-result-ok' : 'zbx-migrate-result-err';
+        const cls  = type === 'success' ? 'zbx-migrate-result-ok' : 'zbx-migrate-result-err';
         const msgs = messages.length
             ? '<ul style="margin:6px 0 0 16px">' + messages.map(m => '<li>' + escHtml(m) + '</li>').join('') + '</ul>'
             : '';
-
         divResult.innerHTML = '<div class="' + cls + '"><strong>' + escHtml(title) + '</strong>' + msgs + '</div>';
         divResult.style.display = '';
         divResult.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    // ── Escape HTML ──────────────────────────────────────────────────────────
     function escHtml(str) {
         return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
 })();
