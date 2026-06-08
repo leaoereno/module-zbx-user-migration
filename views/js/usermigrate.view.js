@@ -1,33 +1,56 @@
 /**
- * zbx-user-migrate — usermigrate.view.js
+ * zbx-user-migrate — usermigrate.js v1.1.0
  *
- * Gerencia toda a lógica de interação da página de migração:
- *   - Habilita botão "Verificar" quando ambos os selects têm valor
+ * Gerencia toda a logica de interacao da pagina de migracao:
+ *   - Exibe badge de autenticacao dinamico ao selecionar usuario
+ *   - Habilita botao "Verificar" quando ambos os selects tem valor diferente
  *   - Chama usermigrate.preview e renderiza a tabela de preview
- *   - Chama usermigrate.execute após confirmação
+ *   - Chama usermigrate.execute apos confirmacao
  *   - Exibe resultado de sucesso ou erro
  */
 
 (function () {
     'use strict';
 
-    const selSrc     = document.getElementById('userid_src');
-    const selDst     = document.getElementById('userid_dst');
-    const btnPreview = document.getElementById('btn-preview');
-    const btnExecute = document.getElementById('btn-execute');
-    const btnCancel  = document.getElementById('btn-cancel');
-    const divPreview = document.getElementById('zbx-migrate-preview');
-    const divHeader  = document.getElementById('zbx-migrate-preview-header');
-    const divBody    = document.getElementById('zbx-migrate-preview-body');
-    const divTotal   = document.getElementById('zbx-migrate-total');
-    const divResult  = document.getElementById('zbx-migrate-result');
+    const selSrc      = document.getElementById('userid_src');
+    const selDst      = document.getElementById('userid_dst');
+    const btnPreview  = document.getElementById('btn-preview');
+    const btnExecute  = document.getElementById('btn-execute');
+    const btnCancel   = document.getElementById('btn-cancel');
+    const divPreview  = document.getElementById('zbx-migrate-preview');
+    const divHeader   = document.getElementById('zbx-migrate-preview-header');
+    const divBody     = document.getElementById('zbx-migrate-preview-body');
+    const divTotal    = document.getElementById('zbx-migrate-total');
+    const divResult   = document.getElementById('zbx-migrate-result');
+    const srcBadgeWrap = document.getElementById('src-badge-wrap');
+    const dstBadgeWrap = document.getElementById('dst-badge-wrap');
+    const srcBadge    = document.getElementById('src-badge');
+    const dstBadge    = document.getElementById('dst-badge');
 
-    // ── Habilita botão Preview quando ambos os selects têm valor ────────────
+    // ── Atualiza badge de autenticacao ao trocar select ──────────────────────
+    function updateBadge(select, badgeEl, badgeWrap) {
+        const opt = select.options[select.selectedIndex];
+        if (!opt || !opt.value) {
+            badgeWrap.style.display = 'none';
+            return;
+        }
+
+        const label = opt.getAttribute('data-badge') || 'SYSTEM';
+        const cls   = opt.getAttribute('data-badge-class') || 'zbx-badge-system';
+
+        badgeEl.textContent = label;
+        badgeEl.className   = 'zbx-migrate-badge ' + cls;
+        badgeWrap.style.display = '';
+    }
+
+    // ── Habilita botao Preview quando ambos os selects tem valores diferentes ─
     function syncPreviewButton() {
+        updateBadge(selSrc, srcBadge, srcBadgeWrap);
+        updateBadge(selDst, dstBadge, dstBadgeWrap);
+
         const ready = selSrc.value && selDst.value && selSrc.value !== selDst.value;
         btnPreview.disabled = !ready;
 
-        // Esconde preview anterior ao trocar seleção
         divPreview.style.display = 'none';
         divResult.style.display  = 'none';
     }
@@ -75,8 +98,8 @@
 
     // ── Renderiza preview ────────────────────────────────────────────────────
     function renderPreview(data) {
-        const srcName = data.user_src.username + (data.user_src.name ? ' (' + data.user_src.name + ' ' + data.user_src.surname + ')' : '');
-        const dstName = data.user_dst.username + (data.user_dst.name ? ' (' + data.user_dst.name + ' ' + data.user_dst.surname + ')' : '');
+        const srcName = formatUserName(data.user_src);
+        const dstName = formatUserName(data.user_dst);
 
         divHeader.innerHTML =
             '<strong>' + escHtml(srcName) + '</strong>' +
@@ -92,7 +115,6 @@
             divTotal.textContent = data.total + ' objeto(s) a migrar';
             btnExecute.style.display = '';
 
-            // Toggle de expansão das listas
             divBody.querySelectorAll('.zbx-migrate-section-header').forEach(function (hdr) {
                 hdr.addEventListener('click', function () {
                     const items = hdr.closest('.zbx-migrate-section').querySelector('.zbx-migrate-items');
@@ -105,6 +127,14 @@
 
         divPreview.style.display = '';
         divPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function formatUserName(user) {
+        let name = user.username;
+        if (user.name || user.surname) {
+            name += ' (' + (user.name + ' ' + user.surname).trim() + ')';
+        }
+        return name;
     }
 
     function renderSection(section) {
@@ -133,7 +163,7 @@
         divPreview.style.display = 'none';
     });
 
-    // ── Executar migração ────────────────────────────────────────────────────
+    // ── Executar migracao ────────────────────────────────────────────────────
     btnExecute.addEventListener('click', function () {
         const srcLabel = selSrc.options[selSrc.selectedIndex].text;
         const dstLabel = selDst.options[selDst.selectedIndex].text;
@@ -167,9 +197,10 @@
                 showResult('error', data.error.title, data.error.messages || []);
             } else {
                 showResult('success', data.success.title, data.success.messages || []);
-                // Reseta os selects
                 selSrc.value = '';
                 selDst.value = '';
+                srcBadgeWrap.style.display = 'none';
+                dstBadgeWrap.style.display = 'none';
                 syncPreviewButton();
             }
         })
