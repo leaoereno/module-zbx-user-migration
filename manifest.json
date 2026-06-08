@@ -1,0 +1,25 @@
+{
+    "manifest_version": 2.0,
+    "id": "zbx-user-migrate",
+    "name": "User Migration",
+    "version": "1.0.0",
+    "author": "Rafael Leão",
+    "url": "https://github.com/leaoereno/zbx-user-migrate",
+    "description": "Migrates all owned objects (dashboards, maps, reports, media, actions) from a local user to an LDAP-provisioned user.",
+    "namespace": "UserMigrate",
+    "actions": {
+        "usermigrate.view": {
+            "class": "CControllerUserMigrateView",
+            "view": "usermigrate.view",
+            "layout": "layout.htmlpage"
+        },
+        "usermigrate.preview": {
+            "class": "CControllerUserMigratePreview",
+            "layout": "layout.json"
+        },
+        "usermigrate.execute": {
+            "class": "CControllerUserMigrateExecute",
+            "layout": "layout.json"
+        }
+    }
+}
