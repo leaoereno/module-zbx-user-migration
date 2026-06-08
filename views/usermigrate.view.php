@@ -1,12 +1,37 @@
 <?php
 /**
  * View: usermigrate.view
- * Renderiza a interface de migração de usuários.
  *
- * @var array $data['users']     Lista de usuários para os selects
- * @var array $data['user_data'] Dados do usuário logado
+ * O JS e carregado via tag <script src> apontando para assets/js/,
+ * que e servido estaticamente pelo Nginx/Apache.
+ * O caminho usa o nome do diretorio fisico do modulo (MODULE_DIR),
+ * nao o id do manifest, para garantir compatibilidade entre instalacoes.
+ *
+ * gui_access values (from usrgrp):
+ *   0 = GROUP_GUI_ACCESS_SYSTEM  (default do sistema)
+ *   1 = GROUP_GUI_ACCESS_INTERNAL (local)
+ *   2 = GROUP_GUI_ACCESS_LDAP
+ *   3 = GROUP_GUI_ACCESS_DISABLED
+ *
+ * @var array $data['users']     Lista de usuarios com gui_access resolvido
+ * @var array $data['user_data'] Dados do usuario logado
  */
 
+$module_dir = basename(dirname(__DIR__));
+$js_src = 'modules/' . $module_dir . '/assets/js/usermigrate.js?v=1.1.0';
+
+/**
+ * Retorna o label e a classe CSS do badge de autenticacao
+ * com base no gui_access do usuario.
+ */
+function getAuthBadge(int $gui_access): array {
+    switch ($gui_access) {
+        case 1:  return ['label' => 'LOCAL',    'class' => 'zbx-badge-local'];
+        case 2:  return ['label' => 'LDAP',     'class' => 'zbx-badge-ldap'];
+        case 3:  return ['label' => 'DISABLED', 'class' => 'zbx-badge-disabled'];
+        default: return ['label' => 'SYSTEM',   'class' => 'zbx-badge-system'];
+    }
+}
 ?>
 <div class="zbx-migrate-wrap">
 
@@ -22,14 +47,20 @@
         <div class="zbx-migrate-selectors">
 
             <div class="zbx-migrate-field">
-                <label for="userid_src">Usuário de Origem <span class="zbx-migrate-badge zbx-badge-src">Local</span></label>
+                <label for="userid_src">Usuário de Origem</label>
                 <select id="userid_src" name="userid_src" class="zbx-migrate-select">
                     <option value="">-- Selecione --</option>
-                    <?php foreach ($data['users'] as $u): ?>
+                    <?php foreach ($data['users'] as $u):
+                        $badge = getAuthBadge((int)$u['gui_access']);
+                    ?>
                         <option value="<?= htmlspecialchars($u['userid']) ?>"
-                                data-username="<?= htmlspecialchars($u['username']) ?>">
+                                data-badge="<?= $badge['label'] ?>"
+                                data-badge-class="<?= $badge['class'] ?>">
                             <?= htmlspecialchars($u['username']) ?>
-                            <?= ($u['name'] || $u['surname']) ? '(' . htmlspecialchars(trim($u['name'] . ' ' . $u['surname'])) . ')' : '' ?>
+                            <?= ($u['name'] || $u['surname'])
+                                ? '(' . htmlspecialchars(trim($u['name'] . ' ' . $u['surname'])) . ')'
+                                : '' ?>
+                            [<?= $badge['label'] ?>]
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -39,20 +70,37 @@
             <div class="zbx-migrate-arrow">→</div>
 
             <div class="zbx-migrate-field">
-                <label for="userid_dst">Usuário de Destino <span class="zbx-migrate-badge zbx-badge-dst">LDAP</span></label>
+                <label for="userid_dst">Usuário de Destino</label>
                 <select id="userid_dst" name="userid_dst" class="zbx-migrate-select">
                     <option value="">-- Selecione --</option>
-                    <?php foreach ($data['users'] as $u): ?>
+                    <?php foreach ($data['users'] as $u):
+                        $badge = getAuthBadge((int)$u['gui_access']);
+                    ?>
                         <option value="<?= htmlspecialchars($u['userid']) ?>"
-                                data-username="<?= htmlspecialchars($u['username']) ?>">
+                                data-badge="<?= $badge['label'] ?>"
+                                data-badge-class="<?= $badge['class'] ?>">
                             <?= htmlspecialchars($u['username']) ?>
-                            <?= ($u['name'] || $u['surname']) ? '(' . htmlspecialchars(trim($u['name'] . ' ' . $u['surname'])) . ')' : '' ?>
+                            <?= ($u['name'] || $u['surname'])
+                                ? '(' . htmlspecialchars(trim($u['name'] . ' ' . $u['surname'])) . ')'
+                                : '' ?>
+                            [<?= $badge['label'] ?>]
                         </option>
                     <?php endforeach; ?>
                 </select>
-                <small>Usuário LDAP que receberá os objetos</small>
+                <small>Usuário que receberá os objetos</small>
             </div>
 
+        </div>
+
+        <!-- Badge dinamico exibido abaixo dos selects apos selecao -->
+        <div class="zbx-migrate-badge-row">
+            <div id="src-badge-wrap" class="zbx-migrate-badge-wrap" style="display:none;">
+                Tipo de autenticação: <span id="src-badge" class="zbx-migrate-badge"></span>
+            </div>
+            <div class="zbx-migrate-arrow-small">→</div>
+            <div id="dst-badge-wrap" class="zbx-migrate-badge-wrap" style="display:none;">
+                Tipo de autenticação: <span id="dst-badge" class="zbx-migrate-badge"></span>
+            </div>
         </div>
 
         <div class="zbx-migrate-actions">
@@ -67,17 +115,12 @@
     <div id="zbx-migrate-preview" class="zbx-migrate-preview" style="display:none;">
 
         <div id="zbx-migrate-preview-header" class="zbx-migrate-preview-header"></div>
-
         <div id="zbx-migrate-preview-body"></div>
 
         <div class="zbx-migrate-confirm-bar">
             <span id="zbx-migrate-total"></span>
-            <button id="btn-execute" class="btn-danger">
-                Confirmar Migração
-            </button>
-            <button id="btn-cancel" class="btn-alt">
-                Cancelar
-            </button>
+            <button id="btn-execute" class="btn-danger">Confirmar Migração</button>
+            <button id="btn-cancel" class="btn-alt">Cancelar</button>
         </div>
 
     </div>
@@ -88,181 +131,46 @@
 </div>
 
 <style>
-.zbx-migrate-wrap {
-    max-width: 900px;
-    margin: 24px auto;
-    padding: 0 16px;
-}
-.zbx-migrate-title {
-    font-size: 20px;
-    font-weight: 600;
-    margin-bottom: 6px;
-    color: var(--color-text-primary, #333);
-}
-.zbx-migrate-subtitle {
-    color: var(--color-text-secondary, #666);
-    margin-bottom: 24px;
-    font-size: 13px;
-}
-.zbx-migrate-form {
-    background: var(--color-bg-primary, #fff);
-    border: 1px solid var(--color-border, #ddd);
-    border-radius: 4px;
-    padding: 24px;
-    margin-bottom: 24px;
-}
-.zbx-migrate-selectors {
-    display: flex;
-    align-items: flex-end;
-    gap: 16px;
-    flex-wrap: wrap;
-}
-.zbx-migrate-field {
-    flex: 1;
-    min-width: 220px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.zbx-migrate-field label {
-    font-weight: 600;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.zbx-migrate-field small {
-    font-size: 11px;
-    color: var(--color-text-secondary, #888);
-}
-.zbx-migrate-select {
-    width: 100%;
-    padding: 6px 8px;
-    border: 1px solid var(--color-border, #ccc);
-    border-radius: 3px;
-    font-size: 13px;
-}
-.zbx-migrate-arrow {
-    font-size: 28px;
-    color: var(--color-text-secondary, #aaa);
-    padding-bottom: 20px;
-    user-select: none;
-}
-.zbx-migrate-badge {
-    font-size: 10px;
-    padding: 1px 6px;
-    border-radius: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.zbx-badge-src { background: #fff3cd; color: #856404; }
-.zbx-badge-dst { background: #d1e7dd; color: #0a4f2e; }
-.zbx-migrate-actions {
-    margin-top: 20px;
-}
-.zbx-migrate-preview {
-    background: var(--color-bg-primary, #fff);
-    border: 1px solid var(--color-border, #ddd);
-    border-radius: 4px;
-    overflow: hidden;
-}
-.zbx-migrate-preview-header {
-    background: var(--color-bg-secondary, #f8f9fa);
-    border-bottom: 1px solid var(--color-border, #ddd);
-    padding: 14px 20px;
-    font-size: 14px;
-}
-.zbx-migrate-section {
-    border-bottom: 1px solid var(--color-border, #eee);
-    padding: 16px 20px;
-}
+.zbx-migrate-wrap { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+.zbx-migrate-title { font-size: 20px; font-weight: 600; margin-bottom: 6px; color: var(--color-text-primary, #333); }
+.zbx-migrate-subtitle { color: var(--color-text-secondary, #666); margin-bottom: 24px; font-size: 13px; }
+.zbx-migrate-form { background: var(--color-bg-primary, #fff); border: 1px solid var(--color-border, #ddd); border-radius: 4px; padding: 24px; margin-bottom: 24px; }
+.zbx-migrate-selectors { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.zbx-migrate-field { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 6px; }
+.zbx-migrate-field label { font-weight: 600; font-size: 13px; }
+.zbx-migrate-field small { font-size: 11px; color: var(--color-text-secondary, #888); }
+.zbx-migrate-select { width: 100%; padding: 6px 8px; border: 1px solid var(--color-border, #ccc); border-radius: 3px; font-size: 13px; }
+.zbx-migrate-arrow { font-size: 28px; color: var(--color-text-secondary, #aaa); padding-bottom: 20px; user-select: none; }
+.zbx-migrate-arrow-small { font-size: 18px; color: var(--color-text-secondary, #aaa); user-select: none; }
+.zbx-migrate-badge-row { display: flex; align-items: center; gap: 16px; margin-top: 12px; min-height: 24px; flex-wrap: wrap; }
+.zbx-migrate-badge-wrap { flex: 1; font-size: 12px; color: var(--color-text-secondary, #666); display: flex; align-items: center; gap: 6px; }
+.zbx-migrate-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.zbx-badge-local    { background: #fff3cd; color: #856404; }
+.zbx-badge-ldap     { background: #d1e7dd; color: #0a4f2e; }
+.zbx-badge-system   { background: #e2e3e5; color: #383d41; }
+.zbx-badge-disabled { background: #f8d7da; color: #58151c; }
+.zbx-badge-saml     { background: #cfe2ff; color: #084298; }
+.zbx-migrate-actions { margin-top: 20px; }
+.zbx-migrate-preview { background: var(--color-bg-primary, #fff); border: 1px solid var(--color-border, #ddd); border-radius: 4px; overflow: hidden; }
+.zbx-migrate-preview-header { background: var(--color-bg-secondary, #f8f9fa); border-bottom: 1px solid var(--color-border, #ddd); padding: 14px 20px; font-size: 14px; }
+.zbx-migrate-section { border-bottom: 1px solid var(--color-border, #eee); padding: 16px 20px; }
 .zbx-migrate-section:last-child { border-bottom: none; }
-.zbx-migrate-section-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-    cursor: pointer;
-    user-select: none;
-}
-.zbx-migrate-section-title {
-    font-weight: 600;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.zbx-migrate-count {
-    background: #d35400;
-    color: #fff;
-    font-size: 11px;
-    padding: 1px 7px;
-    border-radius: 10px;
-    font-weight: 600;
-}
-.zbx-migrate-section-desc {
-    font-size: 12px;
-    color: var(--color-text-secondary, #888);
-    margin-bottom: 8px;
-}
-.zbx-migrate-items {
-    display: none;
-    margin-top: 8px;
-}
+.zbx-migrate-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; cursor: pointer; user-select: none; }
+.zbx-migrate-section-title { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.zbx-migrate-count { background: #d35400; color: #fff; font-size: 11px; padding: 1px 7px; border-radius: 10px; font-weight: 600; }
+.zbx-migrate-section-desc { font-size: 12px; color: var(--color-text-secondary, #888); margin-bottom: 8px; }
+.zbx-migrate-items { display: none; margin-top: 8px; }
 .zbx-migrate-items.open { display: block; }
-.zbx-migrate-items ul {
-    margin: 0;
-    padding: 0 0 0 18px;
-    list-style: disc;
-}
-.zbx-migrate-items li {
-    font-size: 12px;
-    color: var(--color-text-secondary, #555);
-    padding: 2px 0;
-}
-.zbx-migrate-toggle {
-    font-size: 11px;
-    color: var(--color-link, #1a7dc4);
-    cursor: pointer;
-}
-.zbx-migrate-confirm-bar {
-    background: var(--color-bg-secondary, #f8f9fa);
-    border-top: 1px solid var(--color-border, #ddd);
-    padding: 14px 20px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-#zbx-migrate-total {
-    flex: 1;
-    font-size: 13px;
-    font-weight: 600;
-}
-.zbx-migrate-result-ok {
-    padding: 14px 18px;
-    border-radius: 4px;
-    background: #d1e7dd;
-    border: 1px solid #a3cfbb;
-    color: #0a4f2e;
-    font-size: 13px;
-}
+.zbx-migrate-items ul { margin: 0; padding: 0 0 0 18px; list-style: disc; }
+.zbx-migrate-items li { font-size: 12px; color: var(--color-text-secondary, #555); padding: 2px 0; }
+.zbx-migrate-toggle { font-size: 11px; color: var(--color-link, #1a7dc4); cursor: pointer; }
+.zbx-migrate-confirm-bar { background: var(--color-bg-secondary, #f8f9fa); border-top: 1px solid var(--color-border, #ddd); padding: 14px 20px; display: flex; align-items: center; gap: 12px; }
+#zbx-migrate-total { flex: 1; font-size: 13px; font-weight: 600; }
+.zbx-migrate-result-ok { padding: 14px 18px; border-radius: 4px; background: #d1e7dd; border: 1px solid #a3cfbb; color: #0a4f2e; font-size: 13px; }
 .zbx-migrate-result-ok strong { display: block; margin-bottom: 4px; }
-.zbx-migrate-result-err {
-    padding: 14px 18px;
-    border-radius: 4px;
-    background: #f8d7da;
-    border: 1px solid #f1aeb5;
-    color: #58151c;
-    font-size: 13px;
-}
+.zbx-migrate-result-err { padding: 14px 18px; border-radius: 4px; background: #f8d7da; border: 1px solid #f1aeb5; color: #58151c; font-size: 13px; }
 .zbx-migrate-result-err strong { display: block; margin-bottom: 4px; }
-.zbx-migrate-empty {
-    padding: 32px 20px;
-    text-align: center;
-    color: var(--color-text-secondary, #888);
-    font-size: 13px;
-}
+.zbx-migrate-empty { padding: 32px 20px; text-align: center; color: var(--color-text-secondary, #888); font-size: 13px; }
 </style>
 
-<script src="modules/zbx-user-migrate/assets/js/usermigrate.js?v=1.0"></script>
+<script src="<?= $js_src ?>"></script>
