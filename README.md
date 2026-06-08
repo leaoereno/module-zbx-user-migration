@@ -1,8 +1,11 @@
-# zbx-user-migrate
+# module-zbx-user-migration
 
-Modulo para **Zabbix 7.0 LTS** que adiciona o menu **Usuarios > Migracao de Usuarios**,
+Modulo para **Zabbix 7.0 LTS** que adiciona o menu **Users > User Migration**,
 permitindo transferir todos os objetos vinculados a um usuario local para um usuario
-provisionado via LDAP/JIT, sem manipulacao manual de banco de dados.
+provisionado via LDAP, SAML ou qualquer outro IdP, sem manipulacao manual de banco.
+
+> **Compatibilidade de banco:** MySQL 8.0+ e MariaDB 10.5+.
+> PostgreSQL nao e suportado nesta versao.
 
 ---
 
@@ -14,33 +17,28 @@ provisionado via LDAP/JIT, sem manipulacao manual de banco de dados.
 - [Requisitos](#requisitos)
 - [Instalacao](#instalacao)
   - [1. Obter os arquivos](#1-obter-os-arquivos)
-  - [2. Criar o diretorio de modulos](#2-criar-o-diretorio-de-modulos-se-nao-existir)
-  - [3. Instalar via script](#3-instalar-via-script-recomendado)
-  - [4. Instalacao manual](#4-instalacao-manual-alternativa)
-  - [5. Habilitar no Zabbix](#5-habilitar-no-zabbix)
+  - [2. Instalar via script](#2-instalar-via-script-recomendado)
+  - [3. Instalacao manual](#3-instalacao-manual-alternativa)
+  - [4. Habilitar no Zabbix](#4-habilitar-no-zabbix)
 - [Verificacao](#verificacao)
 - [Uso](#uso)
+- [Seguranca](#seguranca)
 - [Desinstalar](#desinstalar)
 - [Atualizar](#atualizar)
 - [Solucao de problemas](#solucao-de-problemas)
 - [Estrutura do modulo](#estrutura-do-modulo)
-- [Seguranca](#seguranca)
 
 ---
 
 ## Contexto e problema
 
-Em ambientes que transitam de autenticacao local para LDAP com provisionamento JIT
-(ex: Authentik como broker OIDC), e comum que um usuario ja possua dashboards, mapas,
-relatorios e configuracoes de notificacao criados com sua conta local antes de ser
-provisionado via LDAP.
+Em ambientes que transitam de autenticacao local para LDAP/JIT (ex: Authentik como broker OIDC),
+um usuario pode ter dashboards, mapas, relatorios e configuracoes criados com sua conta local
+antes de ser provisionado via IdP. Apos o provisionamento, a conta IdP e nova e nao possui
+nenhum desses objetos.
 
-Apos o provisionamento, o usuario LDAP e uma conta nova e separada -- sem nenhum dos
-objetos da conta original. A alternativa manual de reatribuir cada objeto individualmente
-e inviavel em ambientes com muitos usuarios e objetos.
-
-Este modulo resolve isso com uma interface visual que lista previamente tudo que sera
-migrado e executa a transferencia em uma unica transacao atomica.
+Este modulo resolve isso com uma interface visual que lista previamente tudo que sera migrado
+e executa a transferencia em uma unica transacao atomica com rollback automatico em caso de erro.
 
 ---
 
@@ -48,39 +46,31 @@ migrado e executa a transferencia em uma unica transacao atomica.
 
 | Entidade | Tabela | Descricao |
 |---|---|---|
-| Dashboards (ownership) | `dashboard` | Transfere a propriedade dos dashboards criados pelo usuario |
+| Dashboards (ownership) | `dashboard` | Transfere a propriedade dos dashboards |
 | Permissoes de Dashboard | `dashboard_user` | Reatribui acessos a dashboards compartilhados |
-| Mapas de Rede (ownership) | `sysmaps` | Transfere a propriedade dos mapas de rede |
+| Mapas de Rede (ownership) | `sysmaps` | Transfere a propriedade dos mapas |
 | Permissoes de Mapa | `sysmap_user` | Reatribui acessos a mapas compartilhados |
 | Relatorios Agendados | `report` | Transfere a propriedade dos relatorios |
-| Destinatarios de Relatorio | `report_user` | Reatribui o usuario como destinatario de relatorios |
-| Midias de Notificacao | `media` | Transfere configuracoes de e-mail, SMS, webhook, etc |
-| Destinatarios de Action | `opmessage_usr` | Substitui o usuario em operacoes de Trigger Actions |
-| API Tokens | `token` | Transfere tokens de API gerados pelo usuario |
-| Grupos de Usuario | `users_groups` | Adiciona o destino nos grupos do origem (sem duplicar) |
-| Preferencias de Interface | `profiles` | Migra filtros salvos, colunas e configuracoes de UI |
-| Plantao - Telefones | `module_plantao_phones` | Transfere registros de telefone do modulo de plantao |
-| Plantao - Escalas | `module_plantao_schedule` | Transfere escalas de plantao vinculadas ao usuario |
-
-> As tabelas de plantao sao verificadas dinamicamente. Se nao existirem no banco,
-> as entradas correspondentes sao ignoradas sem erro.
+| Destinatarios de Relatorio | `report_user` | Reatribui destinatarios de relatorios |
+| Midias de Notificacao | `media` | Transfere e-mail, SMS, webhook, etc |
+| Destinatarios de Action | `opmessage_usr` | Substitui usuario em Trigger Actions |
+| API Tokens | `token` | Transfere tokens de API |
+| Grupos de Usuario | `users_groups` | Adiciona destino nos grupos do origem (sem duplicar) |
+| Preferencias de Interface | `profiles` | Migra filtros salvos e configuracoes de UI |
+| Plantao - Telefones | `module_plantao_phones` | Se existir no banco |
+| Plantao - Escalas | `module_plantao_schedule` | Se existir no banco |
 
 ---
 
 ## O que nao e migrado
 
-Os itens abaixo sao intencionalmente ignorados por serem dados historicos ou de sistema:
-
 | Tabela | Motivo |
 |---|---|
-| `acknowledges` | Historico de reconhecimento de problemas -- imutavel |
-| `alerts` | Log historico de alertas disparados |
-| `auditlog` | Trilha de auditoria -- nao deve ser alterada |
-| `event_recovery`, `event_suppress` | Eventos historicos |
-| `problem` | Estado de problemas ativos -- gerenciado pelo servidor |
-| `sessions`, `custom_user_sessions` | Sessoes ativas -- invalidas apos login |
-| `mfa_totp_secret` | Segredo TOTP -- vinculado ao dispositivo do usuario |
-| `user_scim_group`, `user_ugset` | Gerenciados automaticamente pelo LDAP/SCIM |
+| `acknowledges`, `alerts`, `auditlog` | Historico imutavel |
+| `event_recovery`, `event_suppress`, `problem` | Estado gerenciado pelo servidor |
+| `sessions`, `custom_user_sessions` | Sessoes ativas — invalidas apos login |
+| `mfa_totp_secret` | Vinculado ao dispositivo do usuario |
+| `user_scim_group`, `user_ugset` | Gerenciados pelo LDAP/SCIM |
 
 ---
 
@@ -90,12 +80,9 @@ Os itens abaixo sao intencionalmente ignorados por serem dados historicos ou de 
 |---|---|
 | Zabbix Server + Frontend | 7.0 LTS |
 | PHP | 8.0+ |
-| Banco de dados | MySQL 8.0+ / MariaDB 10.5+ / PostgreSQL 13+ |
+| Banco de dados | MySQL 8.0+ ou MariaDB 10.5+ |
 | Perfil no Zabbix | Super Admin |
-| Sistema operacional | AlmaLinux 8/9, RHEL 8/9, Rocky Linux, Debian/Ubuntu |
-
-> O modulo atua exclusivamente no frontend PHP.
-> Nao requer alteracoes no Zabbix Server ou Agent.
+| SO | AlmaLinux 8/9, RHEL 8/9, Rocky Linux, Debian/Ubuntu |
 
 ---
 
@@ -103,242 +90,186 @@ Os itens abaixo sao intencionalmente ignorados por serem dados historicos ou de 
 
 ### 1. Obter os arquivos
 
-**Via Git (recomendado):**
-
 ```bash
-git clone https://github.com/leaoereno/zbx-user-migrate.git
-cd zbx-user-migrate
+git clone https://github.com/leaoereno/module-zbx-user-migration.git
+cd module-zbx-user-migration
 ```
 
-**Via SCP (transferir ao servidor diretamente):**
+Via SCP:
 
 ```bash
-# Na maquina local
-scp zbx-user-migrate.tar.gz root@<ip-do-servidor>:/tmp/
-
-# No servidor
-cd /tmp
-tar -xzf zbx-user-migrate.tar.gz
-cd zbx-user-migrate
+scp -r module-zbx-user-migration/ root@<ip-do-servidor>:/tmp/
+ssh root@<ip-do-servidor>
+cd /tmp/module-zbx-user-migration
 ```
+
+> **Atencao ao clonar via Git como root:** o `git clone` cria os arquivos com
+> `root:root`, impedindo o Apache/Nginx de ler o modulo. Apos o clone, sempre
+> ajuste as permissoes antes de habilitar:
+>
+> ```bash
+> # Apache (AlmaLinux/RHEL/Rocky)
+> chown -R apache:apache /usr/share/zabbix/modules/module-zbx-user-migration
+>
+> # Nginx / Docker
+> chown -R nginx:nginx /usr/share/zabbix/modules/module-zbx-user-migration
+> ```
+>
+> O `install.sh` ja faz isso automaticamente. O aviso se aplica apenas a
+> instalacoes manuais via `git clone` direto no diretorio de modulos.
 
 ---
 
-### 2. Criar o diretorio de modulos (se nao existir)
-
-```bash
-ls /usr/share/zabbix/modules/
-```
-
-Se o diretorio nao existir:
-
-```bash
-mkdir -p /usr/share/zabbix/modules
-```
-
-Identifique o usuario do servidor web:
-
-```bash
-# Apache (AlmaLinux / RHEL / Rocky)
-ps aux | grep httpd | grep -v grep | awk '{print $1}' | head -1
-
-# Nginx
-ps aux | grep nginx | grep -v grep | awk '{print $1}' | head -1
-```
-
-O usuario normalmente e `apache` (RHEL/AlmaLinux) ou `www-data` (Debian/Ubuntu).
-
----
-
-### 3. Instalar via script (recomendado)
+### 2. Instalar via script (recomendado)
 
 ```bash
 chmod +x install.sh
 sudo ./install.sh
 ```
 
-**Saida esperada:**
+Saida esperada:
 
 ```
--> Copiando modulo para /usr/share/zabbix/modules/zbx-user-migrate ...
+-> Copiando modulo para /usr/share/zabbix/modules/module-zbx-user-migration ...
 -> Ajustando permissoes ...
 
-OK  Modulo instalado em: /usr/share/zabbix/modules/zbx-user-migrate
-
-Proximos passos:
-  1. Acesse o Zabbix: Administracao > Geral > Modulos
-  2. Clique em 'Verificar modulos ausentes'
-  3. Habilite o modulo 'User Migration'
-  4. Acesse Usuarios > Migracao de Usuarios
+OK  Modulo instalado em: /usr/share/zabbix/modules/module-zbx-user-migration
 ```
 
-**Se o seu servidor web usa `www-data` (Debian/Ubuntu)**, edite a linha 8 do script antes de executar:
+Se o servidor web usa `www-data` (Debian/Ubuntu), edite a linha 8 do script:
 
 ```bash
-# install.sh linha 8
 ZABBIX_WEB_USER="www-data"
+```
+
+**Docker com Nginx:** as permissoes devem ser do usuario `nginx`:
+
+```bash
+docker exec <container-frontend> chown -R nginx:nginx \
+  /usr/share/zabbix/modules/module-zbx-user-migration
 ```
 
 ---
 
-### 4. Instalacao manual (alternativa)
+### 3. Instalacao manual (alternativa)
 
 ```bash
-MODULE_DEST="/usr/share/zabbix/modules/zbx-user-migrate"
-WEB_USER="apache"   # ajuste se necessario
+MODULE_DEST="/usr/share/zabbix/modules/module-zbx-user-migration"
+WEB_USER="apache"
 
-cp -r /tmp/zbx-user-migrate "$MODULE_DEST"
+cp -r /tmp/module-zbx-user-migration "$MODULE_DEST"
 chown -R "$WEB_USER:$WEB_USER" "$MODULE_DEST"
 find "$MODULE_DEST" -type f -exec chmod 644 {} \;
 find "$MODULE_DEST" -type d -exec chmod 755 {} \;
 ```
 
-Confirme a estrutura apos a copia:
-
-```bash
-find /usr/share/zabbix/modules/zbx-user-migrate -type f | sort
-```
-
-Resultado esperado:
+Estrutura esperada apos instalacao:
 
 ```
-/usr/share/zabbix/modules/zbx-user-migrate/Module.php
-/usr/share/zabbix/modules/zbx-user-migrate/README.md
-/usr/share/zabbix/modules/zbx-user-migrate/actions/CControllerUserMigrateExecute.php
-/usr/share/zabbix/modules/zbx-user-migrate/actions/CControllerUserMigratePreview.php
-/usr/share/zabbix/modules/zbx-user-migrate/actions/CControllerUserMigrateView.php
-/usr/share/zabbix/modules/zbx-user-migrate/install.sh
-/usr/share/zabbix/modules/zbx-user-migrate/manifest.json
-/usr/share/zabbix/modules/zbx-user-migrate/views/usermigrate.view.js
-/usr/share/zabbix/modules/zbx-user-migrate/views/usermigrate.view.php
+/usr/share/zabbix/modules/module-zbx-user-migration/
+|-- Module.php
+|-- README.md
+|-- actions/
+|   |-- CControllerUserMigrateExecute.php
+|   |-- CControllerUserMigratePreview.php
+|   `-- CControllerUserMigrateView.php
+|-- assets/js/
+|   `-- usermigrate.js
+|-- install.sh
+|-- manifest.json
+`-- views/
+    `-- usermigrate.view.php
 ```
 
 ---
 
-### 5. Habilitar no Zabbix
+### 4. Habilitar no Zabbix
 
-1. Acesse o Zabbix com uma conta **Super Admin**
-2. Navegue ate **Administracao > Geral > Modulos**
-3. Clique no botao **"Verificar modulos ausentes"** no canto superior direito
-4. O modulo **"User Migration"** aparecera na lista com status `Desabilitado`
-5. Clique no toggle para habilitar
-
-Apos habilitar, o menu **Usuarios > Migracao de Usuarios** estara disponivel na navegacao lateral.
-
-> Se o modulo nao aparecer apos clicar em "Verificar modulos ausentes",
-> consulte a secao [Solucao de problemas](#solucao-de-problemas).
+1. Acesse com conta **Super Admin**
+2. **Administracao > Geral > Modulos**
+3. Clique em **"Verificar modulos ausentes"**
+4. Habilite **"User Migration"**
+5. O menu **Users > User Migration** aparece na navegacao lateral
 
 ---
 
 ## Verificacao
 
-Apos habilitar, confirme que tudo esta funcionando:
-
-**1. Verifique o menu:**
-
-- Navegue ate **Usuarios** na barra lateral
-- O item **"Migracao de Usuarios"** deve aparecer no submenu
-
-**2. Verifique a pagina:**
-
-- Acesse **Usuarios > Migracao de Usuarios**
-- A pagina deve exibir dois selects: "Usuario de Origem" e "Usuario de Destino"
-
-**3. Teste o preview sem executar:**
-
-- Selecione um usuario de origem e um de destino
-- Clique em **"Verificar o que sera migrado"**
-- A lista de objetos deve aparecer sem erros
-
-**4. Verifique os logs do servidor web:**
-
 ```bash
-# Apache - AlmaLinux/RHEL
-tail -f /var/log/httpd/error_log | grep -i "usermigrate\|fatal\|error"
+# Confirma permissoes (Apache)
+sudo -u apache cat /usr/share/zabbix/modules/module-zbx-user-migration/manifest.json
+
+# Sintaxe PHP
+php -l /usr/share/zabbix/modules/module-zbx-user-migration/Module.php
+php -l /usr/share/zabbix/modules/module-zbx-user-migration/actions/CControllerUserMigrateExecute.php
+
+# Log de erros
+tail -f /var/log/httpd/error_log | grep -i "usermigrate\|fatal"
 ```
+
+Apos habilitar:
+- Navegue a **Users > User Migration**
+- Selecione origem e destino — badges de autenticacao aparecem (LOCAL/LDAP/SAML/SYSTEM)
+- Clique em **"Verificar o que sera migrado"** — lista preview sem alterar nada
 
 ---
 
 ## Uso
 
-### Fluxo completo
-
 **Passo 1 — Selecionar usuarios**
 
-Acesse **Usuarios > Migracao de Usuarios** e selecione:
-- **Usuario de Origem:** conta local que sera esvaziada
-- **Usuario de Destino:** conta LDAP que recebera os objetos
+Selecione o usuario de origem (conta local a ser esvaziada) e o de destino (conta IdP que recebera os objetos). Os badges indicam o tipo de autenticacao de cada usuario.
 
-O botao **"Verificar o que sera migrado"** e habilitado apenas quando ambos os campos
-estao preenchidos e sao diferentes entre si.
+**Passo 2 — Revisar preview**
 
-**Passo 2 — Revisar o preview**
-
-Apos clicar em "Verificar", uma lista expansivel exibe todas as entidades encontradas,
-agrupadas por tipo, com a contagem de objetos em cada categoria.
-
-Clique em **"v expandir"** em cada secao para ver os nomes individuais dos objetos.
+Clique em **"Verificar o que sera migrado"**. A lista exibe todas as entidades encontradas agrupadas por tipo. Avisos em amarelo aparecem se o usuario de origem for Super Admin ou Admin nativo.
 
 Nenhuma alteracao e feita nesta etapa.
 
-**Passo 3 — Confirmar a migracao**
+**Passo 3 — Confirmar**
 
-Clique em **"Confirmar Migracao"**. Um dialogo de confirmacao exibe os nomes dos
-dois usuarios e um aviso de que a operacao e irreversivel.
+Clique em **"Confirmar Migracao"**. Um prompt solicita que voce **digite o username do usuario de origem** para confirmar. Apos a confirmacao correta, a migracao e executada em transacao atomica.
 
-Apos confirmar, a migracao e executada em uma transacao atomica:
-- Se tudo correr bem: mensagem de sucesso com resumo do que foi migrado
-- Se qualquer erro ocorrer: rollback completo, nenhuma alteracao e salva
-
-**Exemplo de resultado:**
+**Resultado:**
 
 ```
 Migracao concluida: usuario_local -> usuario_ldap
-3 dashboard(s), 2 mapa(s) de rede, 5 midia(s) de notificacao,
-2 grupo(s) de usuario migrado(s) com sucesso.
+3 dashboard(s), 2 mapa(s) de rede, 5 midia(s) migrado(s) com sucesso.
 ```
 
-### Comportamento com duplicatas
+A operacao e registrada no **auditlog nativo do Zabbix** (Administracao > Auditoria).
 
-O modulo trata conflitos automaticamente:
+---
 
-- **Grupos:** apenas grupos que o destino ainda nao possui sao adicionados
-- **Permissoes de dashboard/mapa:** registros duplicados sao removidos do origem antes da transferencia
-- **Preferencias de interface:** apenas preferencias ausentes no destino sao migradas; as existentes sao preservadas
+## Seguranca
+
+- **Permissao:** apenas Super Admin pode acessar o modulo
+- **CSRF:** token validado no execute para prevenir ataques CSRF
+- **Confirmacao por username:** o usuario deve digitar o username de origem antes de executar
+- **Bloqueio do Admin nativo:** usuarios com ID 1 nao podem ser migrados
+- **Aviso de Super Admin:** alerta visual se o usuario de origem tiver role privilegiada
+- **Transacao atomica:** rollback completo em caso de qualquer erro
+- **Sem duplicatas:** grupos e permissoes ja existentes no destino sao detectados e ignorados
+- **Auditoria:** toda migracao e registrada no auditlog do Zabbix com admin, IPs e resumo
+- **TABLE_SCHEMA dinamico:** usa `DATABASE()` em vez de string hardcoded `'zabbix'`
 
 ---
 
 ## Desinstalar
 
-**1. Desabilitar no Zabbix:**
-
-- **Administracao > Geral > Modulos**
-- Desabilite o modulo "User Migration"
-
-**2. Remover os arquivos:**
-
-```bash
-rm -rf /usr/share/zabbix/modules/zbx-user-migrate
-```
-
-**3. Verificar remocao:**
-
-- Volte em **Administracao > Geral > Modulos**
-- Clique em "Verificar modulos ausentes"
-- O modulo nao deve mais aparecer
+1. **Administracao > Geral > Modulos** — desabilite "User Migration"
+2. `rm -rf /usr/share/zabbix/modules/module-zbx-user-migration`
 
 ---
 
 ## Atualizar
 
 ```bash
-cd /usr/share/zabbix/modules/zbx-user-migrate
+cd /usr/share/zabbix/modules/module-zbx-user-migration
 git pull origin main
-chown -R apache:apache .
+chown -R apache:apache .   # ou nginx:nginx em Docker
 systemctl restart php-fpm
 ```
-
-Nao e necessario desabilitar o modulo antes de atualizar.
 
 ---
 
@@ -346,147 +277,81 @@ Nao e necessario desabilitar o modulo antes de atualizar.
 
 **Modulo nao aparece apos "Verificar modulos ausentes"**
 
-Verifique se o manifest.json esta acessivel:
-
 ```bash
-sudo -u apache cat /usr/share/zabbix/modules/zbx-user-migrate/manifest.json
+sudo -u apache cat /usr/share/zabbix/modules/module-zbx-user-migration/manifest.json
+# Se "Permission denied": chown -R apache:apache /usr/share/zabbix/modules/module-zbx-user-migration
 ```
 
-Se retornar "Permission denied":
+**Zabbix nao carrega apos habilitar**
 
 ```bash
-chown -R apache:apache /usr/share/zabbix/modules/zbx-user-migrate
-```
-
----
-
-**Menu "Migracao de Usuarios" nao aparece apos habilitar**
-
-Verifique erros de PHP no log:
-
-```bash
-tail -30 /var/log/httpd/error_log | grep fatal
-```
-
-Teste a sintaxe do Module.php:
-
-```bash
-php -l /usr/share/zabbix/modules/zbx-user-migrate/Module.php
-```
-
----
-
-**Zabbix nao carrega apos habilitar o modulo**
-
-Desabilite via banco para recuperar o acesso:
-
-```bash
+# Desabilita via banco
 mysql -u root zabbix -e \
-  "UPDATE module SET status=0 WHERE relative_path='modules/zbx-user-migrate';"
+  "UPDATE module SET status=0 WHERE relative_path='modules/module-zbx-user-migration';"
 systemctl restart php-fpm
+
+# Verifica erro
+tail -20 /var/log/httpd/error_log | grep fatal
 ```
 
-Depois verifique o log:
+**Docker:**
 
 ```bash
-tail -20 /var/log/httpd/error_log | grep -i "fatal\|error"
+docker exec zabbix-frontend bash -c \
+  'mysql -h $DB_SERVER_HOST -u $MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE \
+  -e "UPDATE module SET status=0 WHERE relative_path LIKE \"%migr%\";"'
 ```
 
----
+**Botao "Verificar" nao habilita**
 
-**Preview retorna erro "Usuário não encontrado"**
-
-Confirme que os dois userids existem no banco:
+Abra F12 > Console e verifique se o JS carregou. Se der MIME type error:
 
 ```bash
-mysql -u root zabbix -e \
-  "SELECT userid, username FROM users ORDER BY username;"
+# Confirma o src gerado pela view
+grep "script src" /usr/share/zabbix/modules/module-zbx-user-migration/views/usermigrate.view.php
+# O caminho usa basename(dirname(__DIR__)) — deve corresponder ao diretorio fisico
 ```
 
----
-
-**Migracao executada mas objetos ainda aparecem no usuario de origem**
-
-Verifique se o UPDATE foi aplicado:
+**Verificar auditoria apos migracao**
 
 ```sql
--- Substitua <userid_dst> pelo ID do usuario destino
-SELECT 'dashboards' as tipo, COUNT(*) as total
-FROM dashboard WHERE userid = <userid_dst>
-UNION ALL
-SELECT 'mapas', COUNT(*) FROM sysmaps WHERE userid = <userid_dst>
-UNION ALL
-SELECT 'midias', COUNT(*) FROM media WHERE userid = <userid_dst>;
+SELECT * FROM auditlog
+WHERE resourcetype = 11
+AND details LIKE '%migration%'
+ORDER BY clock DESC
+LIMIT 10;
 ```
-
----
-
-**Erro de sintaxe PHP ao habilitar**
-
-```bash
-php -l /usr/share/zabbix/modules/zbx-user-migrate/Module.php
-php -l /usr/share/zabbix/modules/zbx-user-migrate/actions/CControllerUserMigrateExecute.php
-php -l /usr/share/zabbix/modules/zbx-user-migrate/actions/CControllerUserMigratePreview.php
-php -l /usr/share/zabbix/modules/zbx-user-migrate/actions/CControllerUserMigrateView.php
-```
-
-Todos devem retornar `No syntax errors detected`.
 
 ---
 
 ## Estrutura do modulo
 
 ```
-zbx-user-migrate/
-|
-|-- manifest.json
-|   Declara o modulo, versao, namespace e as 3 actions:
-|   usermigrate.view, usermigrate.preview, usermigrate.execute
-|
-|-- Module.php
-|   Classe principal. Registra o diretorio de views e injeta
-|   o item "Migracao de Usuarios" no submenu de Usuarios.
-|
-|-- install.sh
-|   Script Bash de instalacao. Copia arquivos e ajusta permissoes.
-|
+module-zbx-user-migration/
+|-- manifest.json               Declara o modulo e as 3 actions
+|-- Module.php                  Registra views e menu Users > User Migration
+|-- install.sh                  Copia arquivos e ajusta permissoes
 |-- actions/
 |   |-- CControllerUserMigrateView.php
-|   |   Carrega a lista de usuarios para popular os selects da UI.
-|   |
+|   |   Carrega usuarios com gui_access resolvido via JOIN em usrgrp
 |   |-- CControllerUserMigratePreview.php
-|   |   Consulta todas as entidades vinculadas ao usuario de origem
-|   |   e retorna o JSON do preview. Nao altera nenhum dado.
-|   |
+|   |   Consulta entidades vinculadas ao usuario de origem (somente leitura)
+|   |   Emite avisos para usuarios Super Admin e Admin nativo
 |   `-- CControllerUserMigrateExecute.php
-|       Executa a migracao dentro de DBbegin/DBcommit/DBrollback.
-|       Trata duplicatas em grupos, permissoes e preferencias.
-|       Verifica dinamicamente tabelas de modulos customizados.
-|
-`-- views/
-    |-- usermigrate.view.php
-    |   Interface HTML com os dois selects, area de preview
-    |   expansivel por categoria e barra de confirmacao.
-    |
-    `-- usermigrate.view.js
-        Logica de interacao: habilita botoes, faz chamadas AJAX
-        para preview e execute, renderiza resultados e trata erros.
+|       Executa migracao em DBbegin/DBcommit/DBrollback
+|       Gera id de users_groups via MAX(id)+1 (sem auto_increment)
+|       DELETE de duplicatas usando INNER JOIN (sem subselect na mesma tabela)
+|       Usa SELECT COUNT antes do UPDATE (sem ROW_COUNT)
+|       Usa DATABASE() no lugar de string hardcoded no INFORMATION_SCHEMA
+|       Registra operacao no auditlog nativo do Zabbix
+|       Bloqueia migracao do Admin nativo (ID 1)
+`-- assets/js/
+    `-- usermigrate.js
+        Badge dinamico por tipo de IdP (LOCAL/LDAP/SAML/SYSTEM/DISABLED)
+        CSRF token enviado no POST do execute
+        Confirmacao por digitacao do username de origem
+        Exibe avisos de Super Admin no preview
 ```
-
----
-
-## Seguranca
-
-- **Escopo de permissao:** apenas usuarios com perfil Super Admin podem acessar
-  as actions do modulo. Qualquer outro perfil recebe HTTP 403.
-- **Preview sem efeito colateral:** a action `usermigrate.preview` e somente leitura.
-  Nenhum dado e alterado ate a confirmacao explcita.
-- **Transacao atomica:** a execucao usa `DBbegin/DBcommit/DBrollback`. Se qualquer
-  operacao falhar, todas as alteracoes sao revertidas automaticamente.
-- **Protecao contra duplicatas:** grupos e permissoes ja existentes no usuario
-  destino sao detectados e ignorados antes de qualquer INSERT.
-- **Tabelas de modulos customizados:** verificadas com `INFORMATION_SCHEMA` antes
-  de qualquer acesso. A ausencia das tabelas nao gera erro.
 
 ---
 
