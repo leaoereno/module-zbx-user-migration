@@ -2,6 +2,7 @@
 
 namespace Modules\UserMigrate\Actions;
 
+require_once __DIR__ . '/../locale/I18n.php';
 use Modules\UserMigrate\I18n;
 
 use CController;

@@ -4,6 +4,7 @@
  * Relatório de objetos vinculados a um usuário — multilíngue via I18n.
  */
 
+require_once __DIR__ . '/../locale/I18n.php';
 use Modules\UserMigrate\I18n;
 
 $t = I18n::get();
