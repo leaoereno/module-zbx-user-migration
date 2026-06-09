@@ -355,6 +355,14 @@ module-zbx-user-migration/
 
 ---
 
-## Autor
+## Créditos
 
-Rafael Leao -- [@leaoereno](https://github.com/leaoereno)
+- **Autor:** Rafael M. A. Leão Ereno (MALE)
+- **LinkedIn:** https://www.linkedin.com/in/leaoereno/
+- **GitHub:** https://github.com/leaoereno
+
+---
+
+## Licença
+
+MIT — use, modifique e distribua livremente.
