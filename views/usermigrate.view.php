@@ -1,30 +1,16 @@
 <?php
 /**
  * View: usermigrate.view
- *
- * O JS e carregado via tag <script src> apontando para assets/js/,
- * que e servido estaticamente pelo Nginx/Apache.
- * O caminho usa o nome do diretorio fisico do modulo (MODULE_DIR),
- * nao o id do manifest, para garantir compatibilidade entre instalacoes.
- *
- * gui_access values (from usrgrp):
- *   0 = GROUP_GUI_ACCESS_SYSTEM  (default do sistema)
- *   1 = GROUP_GUI_ACCESS_INTERNAL (local)
- *   2 = GROUP_GUI_ACCESS_LDAP
- *   3 = GROUP_GUI_ACCESS_DISABLED
- *
- * @var array $data['users']     Lista de usuarios com gui_access resolvido
- * @var array $data['user_data'] Dados do usuario logado
+ * Interface de migração de usuários — multilíngue via I18n.
  */
 
+use Modules\UserMigrate\I18n;
+
+$t          = I18n::get();
 $module_dir = basename(dirname(__DIR__));
-$js_src = 'modules/' . $module_dir . '/assets/js/usermigrate.js?v=1.1.0';
+$lang       = I18n::getLang();
 
-/**
- * Retorna o label e a classe CSS do badge de autenticacao
- * com base no gui_access do usuario.
- */
-function getAuthBadge(int $gui_access): array {
+function getAuthBadgeMigrate(int $gui_access): array {
     switch ($gui_access) {
         case 1:  return ['label' => 'LOCAL',    'class' => 'zbx-badge-local'];
         case 2:  return ['label' => 'LDAP',     'class' => 'zbx-badge-ldap'];
@@ -35,23 +21,18 @@ function getAuthBadge(int $gui_access): array {
 ?>
 <div class="zbx-migrate-wrap">
 
-    <h1 class="zbx-migrate-title">Migração de Usuário</h1>
-    <p class="zbx-migrate-subtitle">
-        Transfere dashboards, mapas, relatórios, mídias, actions e grupos
-        do usuário de <strong>origem</strong> para o usuário de <strong>destino</strong>.
-    </p>
+    <h1 class="zbx-migrate-title"><?= $t('User Migration') ?></h1>
+    <p class="zbx-migrate-subtitle"><?= $t('migrate_subtitle') ?></p>
 
-    <!-- ── Formulário de seleção ── -->
     <div class="zbx-migrate-form">
-
         <div class="zbx-migrate-selectors">
 
             <div class="zbx-migrate-field">
-                <label for="userid_src">Usuário de Origem</label>
+                <label for="userid_src"><?= $t('Source User') ?></label>
                 <select id="userid_src" name="userid_src" class="zbx-migrate-select">
-                    <option value="">-- Selecione --</option>
+                    <option value=""><?= $t('-- Select --') ?></option>
                     <?php foreach ($data['users'] as $u):
-                        $badge = getAuthBadge((int)$u['gui_access']);
+                        $badge = getAuthBadgeMigrate((int)$u['gui_access']);
                     ?>
                         <option value="<?= htmlspecialchars($u['userid']) ?>"
                                 data-badge="<?= $badge['label'] ?>"
@@ -64,17 +45,17 @@ function getAuthBadge(int $gui_access): array {
                         </option>
                     <?php endforeach; ?>
                 </select>
-                <small>Usuário local cujos objetos serão transferidos</small>
+                <small><?= $t('source_hint') ?></small>
             </div>
 
             <div class="zbx-migrate-arrow">→</div>
 
             <div class="zbx-migrate-field">
-                <label for="userid_dst">Usuário de Destino</label>
+                <label for="userid_dst"><?= $t('Destination User') ?></label>
                 <select id="userid_dst" name="userid_dst" class="zbx-migrate-select">
-                    <option value="">-- Selecione --</option>
+                    <option value=""><?= $t('-- Select --') ?></option>
                     <?php foreach ($data['users'] as $u):
-                        $badge = getAuthBadge((int)$u['gui_access']);
+                        $badge = getAuthBadgeMigrate((int)$u['gui_access']);
                     ?>
                         <option value="<?= htmlspecialchars($u['userid']) ?>"
                                 data-badge="<?= $badge['label'] ?>"
@@ -87,45 +68,38 @@ function getAuthBadge(int $gui_access): array {
                         </option>
                     <?php endforeach; ?>
                 </select>
-                <small>Usuário que receberá os objetos</small>
+                <small><?= $t('destination_hint') ?></small>
             </div>
 
         </div>
 
-        <!-- Badge dinamico exibido abaixo dos selects apos selecao -->
         <div class="zbx-migrate-badge-row">
             <div id="src-badge-wrap" class="zbx-migrate-badge-wrap" style="display:none;">
-                Tipo de autenticação: <span id="src-badge" class="zbx-migrate-badge"></span>
+                <?= $t('Authentication type:') ?> <span id="src-badge" class="zbx-migrate-badge"></span>
             </div>
             <div class="zbx-migrate-arrow-small">→</div>
             <div id="dst-badge-wrap" class="zbx-migrate-badge-wrap" style="display:none;">
-                Tipo de autenticação: <span id="dst-badge" class="zbx-migrate-badge"></span>
+                <?= $t('Authentication type:') ?> <span id="dst-badge" class="zbx-migrate-badge"></span>
             </div>
         </div>
 
         <div class="zbx-migrate-actions">
             <button id="btn-preview" class="btn-alt" disabled>
-                Verificar o que será migrado
+                <?= $t('Check what will be migrated') ?>
             </button>
         </div>
-
     </div>
 
-    <!-- ── Área de preview ── -->
     <div id="zbx-migrate-preview" class="zbx-migrate-preview" style="display:none;">
-
         <div id="zbx-migrate-preview-header" class="zbx-migrate-preview-header"></div>
         <div id="zbx-migrate-preview-body"></div>
-
         <div class="zbx-migrate-confirm-bar">
             <span id="zbx-migrate-total"></span>
-            <button id="btn-execute" class="btn-danger">Confirmar Migração</button>
-            <button id="btn-cancel" class="btn-alt">Cancelar</button>
+            <button id="btn-execute" class="btn-danger"><?= $t('Confirm Migration') ?></button>
+            <button id="btn-cancel" class="btn-alt"><?= $t('Cancel') ?></button>
         </div>
-
     </div>
 
-    <!-- ── Resultado ── -->
     <div id="zbx-migrate-result" style="display:none;"></div>
 
 </div>
@@ -149,7 +123,6 @@ function getAuthBadge(int $gui_access): array {
 .zbx-badge-ldap     { background: #d1e7dd; color: #0a4f2e; }
 .zbx-badge-system   { background: #e2e3e5; color: #383d41; }
 .zbx-badge-disabled { background: #f8d7da; color: #58151c; }
-.zbx-badge-saml     { background: #cfe2ff; color: #084298; }
 .zbx-migrate-actions { margin-top: 20px; }
 .zbx-migrate-preview { background: var(--color-bg-primary, #fff); border: 1px solid var(--color-border, #ddd); border-radius: 4px; overflow: hidden; }
 .zbx-migrate-preview-header { background: var(--color-bg-secondary, #f8f9fa); border-bottom: 1px solid var(--color-border, #ddd); padding: 14px 20px; font-size: 14px; }
@@ -171,20 +144,39 @@ function getAuthBadge(int $gui_access): array {
 .zbx-migrate-result-err { padding: 14px 18px; border-radius: 4px; background: #f8d7da; border: 1px solid #f1aeb5; color: #58151c; font-size: 13px; }
 .zbx-migrate-result-err strong { display: block; margin-bottom: 4px; }
 .zbx-migrate-empty { padding: 32px 20px; text-align: center; color: var(--color-text-secondary, #888); font-size: 13px; }
+.zbx-migrate-warnings { padding: 12px 20px; background: #fff3cd; border-bottom: 1px solid #ffc107; }
+.zbx-migrate-warning { font-size: 12px; color: #856404; padding: 3px 0; font-weight: 600; }
 </style>
 
 <script>
-/**
- * zbx-user-migrate — usermigrate.js v1.2.0
- *
- * - Badge de autenticacao dinamico por IdP
- * - CSRF token enviado no execute
- * - Avisos de Super Admin exibidos no preview
- * - Confirmacao por digitacao de username antes de executar
- */
+// Strings i18n passadas do PHP para o JS
+const ZBX_MIGRATE_I18N = <?= json_encode([
+    'checking'         => $t('Checking...'),
+    'check_btn'        => $t('Check what will be migrated'),
+    'confirm_btn'      => $t('Confirm Migration'),
+    'migrating'        => $t('Migrating...'),
+    'cancel'           => $t('Cancel'),
+    'no_objects'       => $t('No objects found linked to source user.'),
+    'and_more'         => $t('...and more'),
+    'items'            => $t('items'),
+    'objects_to_migrate' => $t('objects to migrate'),
+    'expand'           => '▼ ' . ($lang === 'pt_BR' ? 'expandir' : 'expand'),
+    'collapse'         => '▲ ' . ($lang === 'pt_BR' ? 'ocultar'  : 'collapse'),
+    'confirm_prompt'   => $t('confirm_prompt'),
+    'wrong_confirm'    => $t('Wrong confirmation.'),
+    'confirm_mismatch' => $t('confirm_mismatch'),
+    'server_error'     => $t('Server communication error.'),
+    'origin'           => $t('origin'),
+    'destination'      => $t('destination'),
+]) ?>;
 
 (function () {
     'use strict';
+
+    const T = ZBX_MIGRATE_I18N;
+
+    let _srcUsername = '';
+    let _dstUsername = '';
 
     const selSrc       = document.getElementById('userid_src');
     const selDst       = document.getElementById('userid_dst');
@@ -201,11 +193,9 @@ function getAuthBadge(int $gui_access): array {
     const srcBadge     = document.getElementById('src-badge');
     const dstBadge     = document.getElementById('dst-badge');
 
-    // ── Badge de autenticacao ────────────────────────────────────────────────
     function updateBadge(select, badgeEl, badgeWrap) {
         const opt = select.options[select.selectedIndex];
         if (!opt || !opt.value) { badgeWrap.style.display = 'none'; return; }
-
         const label = opt.getAttribute('data-badge') || 'SYSTEM';
         const cls   = opt.getAttribute('data-badge-class') || 'zbx-badge-system';
         badgeEl.textContent = label;
@@ -216,7 +206,6 @@ function getAuthBadge(int $gui_access): array {
     function syncPreviewButton() {
         updateBadge(selSrc, srcBadge, srcBadgeWrap);
         updateBadge(selDst, dstBadge, dstBadgeWrap);
-
         const ready = selSrc.value && selDst.value && selSrc.value !== selDst.value;
         btnPreview.disabled = !ready;
         divPreview.style.display = 'none';
@@ -226,56 +215,42 @@ function getAuthBadge(int $gui_access): array {
     selSrc.addEventListener('change', syncPreviewButton);
     selDst.addEventListener('change', syncPreviewButton);
 
-    // ── POST helper ──────────────────────────────────────────────────────────
     function post(action, params) {
         const body = new URLSearchParams({ action, ...params });
         return fetch('zabbix.php', {
-            method:  'POST',
+            method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body:    body.toString()
+            body: body.toString()
         }).then(r => r.json());
     }
 
-    // ── Preview ──────────────────────────────────────────────────────────────
     btnPreview.addEventListener('click', function () {
         btnPreview.disabled = true;
-        btnPreview.textContent = 'Verificando...';
+        btnPreview.textContent = T.checking;
         divResult.style.display = 'none';
 
-        post('usermigrate.preview', {
-            userid_src: selSrc.value,
-            userid_dst: selDst.value
-        })
+        post('usermigrate.preview', { userid_src: selSrc.value, userid_dst: selDst.value })
         .then(function (data) {
             btnPreview.disabled = false;
-            btnPreview.textContent = 'Verificar o que será migrado';
-
-            if (data.error) {
-                showResult('error', data.error.title, data.error.messages || []);
-                return;
-            }
+            btnPreview.textContent = T.check_btn;
+            if (data.error) { showResult('error', data.error.title, data.error.messages || []); return; }
             renderPreview(data);
         })
         .catch(function (err) {
             btnPreview.disabled = false;
-            btnPreview.textContent = 'Verificar o que será migrado';
-            showResult('error', 'Erro ao comunicar com o servidor.', [err.message]);
+            btnPreview.textContent = T.check_btn;
+            showResult('error', T.server_error, [err.message]);
         });
     });
 
-    // ── Renderiza preview ────────────────────────────────────────────────────
     function renderPreview(data) {
+        _srcUsername = data.user_src.username;
+        _dstUsername = data.user_dst.username;
+
         const srcName = formatUser(data.user_src);
         const dstName = formatUser(data.user_dst);
+        divHeader.innerHTML = '<strong>' + escHtml(srcName) + '</strong> &nbsp;→&nbsp; <strong>' + escHtml(dstName) + '</strong>';
 
-        // Guarda usernames para confirmacao na execucao
-        divPreview.dataset.srcUsername = data.user_src.username;
-        divPreview.dataset.dstUsername = data.user_dst.username;
-
-        divHeader.innerHTML =
-            '<strong>' + escHtml(srcName) + '</strong> &nbsp;→&nbsp; <strong>' + escHtml(dstName) + '</strong>';
-
-        // Exibe avisos de Super Admin / Admin nativo
         let warningsHtml = '';
         if (data.warnings && data.warnings.length) {
             warningsHtml = '<div class="zbx-migrate-warnings">' +
@@ -284,21 +259,20 @@ function getAuthBadge(int $gui_access): array {
         }
 
         if (!data.preview || data.preview.length === 0) {
-            divBody.innerHTML = warningsHtml +
-                '<div class="zbx-migrate-empty">Nenhum objeto encontrado vinculado ao usuário de origem.</div>';
-            divTotal.textContent = '0 objetos a migrar';
+            divBody.innerHTML = warningsHtml + '<div class="zbx-migrate-empty">' + escHtml(T.no_objects) + '</div>';
+            divTotal.textContent = '0 ' + T.objects_to_migrate;
             btnExecute.style.display = 'none';
         } else {
             divBody.innerHTML = warningsHtml + data.preview.map(renderSection).join('');
-            divTotal.textContent = data.total + ' objeto(s) a migrar';
+            divTotal.textContent = data.total + ' ' + T.objects_to_migrate;
             btnExecute.style.display = '';
 
             divBody.querySelectorAll('.zbx-migrate-section-header').forEach(function (hdr) {
                 hdr.addEventListener('click', function () {
-                    const items = hdr.closest('.zbx-migrate-section').querySelector('.zbx-migrate-items');
+                    const items  = hdr.closest('.zbx-migrate-section').querySelector('.zbx-migrate-items');
                     if (items) items.classList.toggle('open');
                     const toggle = hdr.querySelector('.zbx-migrate-toggle');
-                    if (toggle) toggle.textContent = items.classList.contains('open') ? '▲ ocultar' : '▼ expandir';
+                    if (toggle) toggle.textContent = items.classList.contains('open') ? T.collapse : T.expand;
                 });
             });
         }
@@ -315,7 +289,7 @@ function getAuthBadge(int $gui_access): array {
         const itemsHtml = section.items && section.items.length
             ? '<div class="zbx-migrate-items"><ul>' +
               section.items.slice(0, 50).map(i => '<li>' + escHtml(String(i)) + '</li>').join('') +
-              (section.items.length > 50 ? '<li><em>...e mais ' + (section.items.length - 50) + ' itens</em></li>' : '') +
+              (section.items.length > 50 ? '<li><em>' + T.and_more + ' ' + (section.items.length - 50) + ' ' + T.items + '</em></li>' : '') +
               '</ul></div>'
             : '';
 
@@ -323,59 +297,43 @@ function getAuthBadge(int $gui_access): array {
             '<div class="zbx-migrate-section-header">' +
                 '<span class="zbx-migrate-section-title">' + escHtml(section.entity) +
                     '<span class="zbx-migrate-count">' + section.count + '</span></span>' +
-                (itemsHtml ? '<span class="zbx-migrate-toggle">▼ expandir</span>' : '') +
+                (itemsHtml ? '<span class="zbx-migrate-toggle">' + T.expand + '</span>' : '') +
             '</div>' +
             '<div class="zbx-migrate-section-desc">' + escHtml(section.description) + '</div>' +
             itemsHtml +
         '</div>';
     }
 
-    // ── Cancelar ─────────────────────────────────────────────────────────────
-    btnCancel.addEventListener('click', function () {
-        divPreview.style.display = 'none';
-    });
+    btnCancel.addEventListener('click', function () { divPreview.style.display = 'none'; });
 
-    // ── Executar migracao ────────────────────────────────────────────────────
     btnExecute.addEventListener('click', function () {
-        const srcUsername = divPreview.dataset.srcUsername || '';
-        const dstUsername = divPreview.dataset.dstUsername || '';
+        const srcUsername = _srcUsername || '';
+        const dstUsername = _dstUsername || '';
 
-        // Confirmacao por digitacao do username de origem
-        const typed = prompt(
-            'Para confirmar a migração, digite o username do usuário de ORIGEM:\n\n' +
-            'Origem:  ' + srcUsername + '\n' +
-            'Destino: ' + dstUsername + '\n\n' +
-            'Esta operação é irreversível.'
-        );
-
-        if (typed === null) return; // cancelou
+        const typed = prompt(T.confirm_prompt.replace('%s', srcUsername).replace('%s', dstUsername));
+        if (typed === null) return;
 
         if (typed.trim() !== srcUsername) {
-            showResult('error', 'Confirmação incorreta.', ['O username digitado não corresponde ao usuário de origem.']);
+            showResult('error', T.wrong_confirm, [T.confirm_mismatch]);
             return;
         }
 
         btnExecute.disabled = true;
-        btnExecute.textContent = 'Migrando...';
+        btnExecute.textContent = T.migrating;
         btnCancel.disabled = true;
 
-        console.log('[migrate] chamando execute, src=' + selSrc.value + ' dst=' + selDst.value + ' srcUsername=' + srcUsername);
-        post('usermigrate.execute', {
-            userid_src: selSrc.value,
-            userid_dst: selDst.value
-        })
+        post('usermigrate.execute', { userid_src: selSrc.value, userid_dst: selDst.value })
         .then(function (data) {
             divPreview.style.display = 'none';
             btnExecute.disabled = false;
-            btnExecute.textContent = 'Confirmar Migração';
+            btnExecute.textContent = T.confirm_btn;
             btnCancel.disabled = false;
 
             if (data.error) {
                 showResult('error', data.error.title, data.error.messages || []);
             } else {
                 showResult('success', data.success.title, data.success.messages || []);
-                selSrc.value = '';
-                selDst.value = '';
+                selSrc.value = ''; selDst.value = '';
                 srcBadgeWrap.style.display = 'none';
                 dstBadgeWrap.style.display = 'none';
                 syncPreviewButton();
@@ -383,21 +341,19 @@ function getAuthBadge(int $gui_access): array {
         })
         .catch(function (err) {
             btnExecute.disabled = false;
-            btnExecute.textContent = 'Confirmar Migração';
+            btnExecute.textContent = T.confirm_btn;
             btnCancel.disabled = false;
-            showResult('error', 'Erro ao comunicar com o servidor.', [err.message]);
+            showResult('error', T.server_error, [err.message]);
         });
     });
 
-    // ── Resultado ────────────────────────────────────────────────────────────
     function showResult(type, title, messages) {
-        const cls  = type === 'success' ? 'zbx-migrate-result-ok' : 'zbx-migrate-result-err';
+        const cls = type === 'success' ? 'zbx-migrate-result-ok' : 'zbx-migrate-result-err';
         let msgs = '';
         if (messages.length) {
             if (type === 'success') {
-                // Exibe cada item migrado como badge colorido
-                const items = messages.slice(0, -1); // exclui linha de total
-                const total = messages[messages.length - 1]; // ultima linha e o total
+                const items = messages.slice(0, -1);
+                const total = messages[messages.length - 1];
                 msgs = '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">' +
                     items.map(m => '<span style="background:#0a4f2e;color:#fff;padding:2px 10px;border-radius:10px;font-size:12px">' + escHtml(m) + '</span>').join('') +
                     '</div>';
@@ -412,11 +368,8 @@ function getAuthBadge(int $gui_access): array {
     }
 
     function escHtml(str) {
-        return String(str)
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
 })();
-
 </script>

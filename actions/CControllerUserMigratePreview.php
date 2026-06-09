@@ -2,6 +2,8 @@
 
 namespace Modules\UserMigrate\Actions;
 
+use Modules\UserMigrate\I18n;
+
 use CController;
 use CControllerResponseData;
 use CControllerResponseFatal;
@@ -37,7 +39,7 @@ class CControllerUserMigratePreview extends CController {
         if ($src === $dst) {
             $this->setResponse(new CControllerResponseData([
                 'main_block' => json_encode([
-                    'error' => ['title' => 'Usuário de origem e destino não podem ser iguais.']
+                    'error' => ['title' => I18n::get()('err_same_user')]
                 ])
             ]));
             return;
@@ -53,7 +55,7 @@ class CControllerUserMigratePreview extends CController {
         if (!$user_src || !$user_dst) {
             $this->setResponse(new CControllerResponseData([
                 'main_block' => json_encode([
-                    'error' => ['title' => 'Usuário não encontrado.']
+                    'error' => ['title' => I18n::get()('err_user_not_found')]
                 ])
             ]));
             return;
@@ -62,7 +64,7 @@ class CControllerUserMigratePreview extends CController {
         // Aviso extra se usuario de origem for Admin nativo
         $warnings = [];
         if ((int)$src === 1) {
-            $warnings[] = 'ATENÇÃO: O usuário de origem é o Admin nativo (ID 1). A migração será bloqueada na execução.';
+            $warnings[] = I18n::get()('warn_admin_native');
         }
 
         // Aviso se usuario de origem tiver role privilegiada
@@ -100,9 +102,9 @@ class CControllerUserMigratePreview extends CController {
         ));
         if ($rows) {
             $sections[] = [
-                'entity'      => 'Dashboards',
+                'entity' => I18n::get()('Dashboards'),
                 'count'       => count($rows),
-                'description' => 'Transfere a propriedade do dashboard para o usuário destino.',
+                'description' => I18n::get()('dash_desc'),
                 'items'       => array_column($rows, 'name')
             ];
         }
@@ -115,9 +117,9 @@ class CControllerUserMigratePreview extends CController {
         ));
         if ($rows) {
             $sections[] = [
-                'entity'      => 'Permissões de Dashboard',
+                'entity' => I18n::get()('Dashboard Permissions'),
                 'count'       => count($rows),
-                'description' => 'Reatribui as permissões de acesso a dashboards compartilhados.',
+                'description' => I18n::get()('dash_perm_desc'),
                 'items'       => array_column($rows, 'name')
             ];
         }
@@ -128,9 +130,9 @@ class CControllerUserMigratePreview extends CController {
         ));
         if ($rows) {
             $sections[] = [
-                'entity'      => 'Mapas de Rede',
+                'entity' => I18n::get()('Network Maps'),
                 'count'       => count($rows),
-                'description' => 'Transfere a propriedade dos mapas de rede.',
+                'description' => I18n::get()('map_desc'),
                 'items'       => array_column($rows, 'name')
             ];
         }
@@ -143,9 +145,9 @@ class CControllerUserMigratePreview extends CController {
         ));
         if ($rows) {
             $sections[] = [
-                'entity'      => 'Permissões de Mapa',
+                'entity' => I18n::get()('Map Permissions'),
                 'count'       => count($rows),
-                'description' => 'Reatribui as permissões de acesso a mapas compartilhados.',
+                'description' => I18n::get()('map_perm_desc'),
                 'items'       => array_column($rows, 'name')
             ];
         }
@@ -156,9 +158,9 @@ class CControllerUserMigratePreview extends CController {
         ));
         if ($rows) {
             $sections[] = [
-                'entity'      => 'Relatórios Agendados',
+                'entity' => I18n::get()('Scheduled Reports'),
                 'count'       => count($rows),
-                'description' => 'Transfere a propriedade dos relatórios agendados.',
+                'description' => I18n::get()('report_desc'),
                 'items'       => array_column($rows, 'name')
             ];
         }
@@ -171,9 +173,9 @@ class CControllerUserMigratePreview extends CController {
         ));
         if ($rows) {
             $sections[] = [
-                'entity'      => 'Destinatários de Relatório',
+                'entity' => I18n::get()('Report Recipients'),
                 'count'       => count($rows),
-                'description' => 'Reatribui o usuário como destinatário dos relatórios.',
+                'description' => I18n::get()('report_recip_desc'),
                 'items'       => array_column($rows, 'name')
             ];
         }
@@ -184,9 +186,9 @@ class CControllerUserMigratePreview extends CController {
         ));
         if ($rows) {
             $sections[] = [
-                'entity'      => 'Mídias de Notificação',
+                'entity' => I18n::get()('Notification Media'),
                 'count'       => count($rows),
-                'description' => 'Transfere as configurações de mídia (e-mail, SMS, etc).',
+                'description' => I18n::get()('media_desc'),
                 'items'       => array_column($rows, 'sendto')
             ];
         }
@@ -199,9 +201,9 @@ class CControllerUserMigratePreview extends CController {
         ));
         if ($rows) {
             $sections[] = [
-                'entity'      => 'Destinatários de Action (Trigger)',
+                'entity' => I18n::get()('Action Recipients'),
                 'count'       => count($rows),
-                'description' => 'Substitui o usuário como destinatário em operações de Actions.',
+                'description' => I18n::get()('action_desc'),
                 'items'       => array_map(fn($r) => 'Operation ID: ' . $r['operationid'], $rows)
             ];
         }
@@ -212,9 +214,9 @@ class CControllerUserMigratePreview extends CController {
         ));
         if ($rows) {
             $sections[] = [
-                'entity'      => 'API Tokens',
+                'entity' => I18n::get()('API Tokens'),
                 'count'       => count($rows),
-                'description' => 'Transfere os tokens de API para o usuário destino.',
+                'description' => I18n::get()('token_desc'),
                 'items'       => array_column($rows, 'name')
             ];
         }
@@ -234,9 +236,9 @@ class CControllerUserMigratePreview extends CController {
 
             if ($to_add) {
                 $sections[] = [
-                    'entity'      => 'Grupos de Usuário',
+                    'entity' => I18n::get()('User Groups'),
                     'count'       => count($to_add),
-                    'description' => 'Adiciona o usuário destino nos mesmos grupos do usuário origem (grupos já existentes são ignorados).',
+                    'description' => I18n::get()('group_desc'),
                     'items'       => array_column(array_values($to_add), 'name')
                 ];
             }
@@ -248,7 +250,7 @@ class CControllerUserMigratePreview extends CController {
         ));
         if ($rows) {
             $sections[] = [
-                'entity'      => 'Preferências de Interface',
+                'entity' => I18n::get()('Interface Preferences'),
                 'count'       => count($rows),
                 'description' => 'Migra as preferências de interface (filtros salvos, colunas, etc). Preferências existentes no destino são preservadas.',
                 'items'       => array_unique(array_map(fn($r) => explode('.', $r['idx'])[0], $rows))
@@ -262,9 +264,9 @@ class CControllerUserMigratePreview extends CController {
             ));
             if ($rows) {
                 $sections[] = [
-                    'entity'      => 'Plantão — Telefones',
+                    'entity' => 'Plantão — Telefones',
                     'count'       => count($rows),
-                    'description' => 'Transfere os registros de telefone do módulo de plantão.',
+                    'description' => I18n::get()('media_desc'),
                     'items'       => array_column($rows, 'phone')
                 ];
             }
@@ -277,9 +279,9 @@ class CControllerUserMigratePreview extends CController {
             ));
             if ($rows) {
                 $sections[] = [
-                    'entity'      => 'Plantão — Escalas',
+                    'entity' => 'Plantão — Escalas',
                     'count'       => count($rows),
-                    'description' => 'Transfere as escalas de plantão vinculadas ao usuário.',
+                    'description' => I18n::get()('history_desc'),
                     'items'       => array_map(fn($r) => 'Escala ID: ' . $r['scheduleid'], $rows)
                 ];
             }

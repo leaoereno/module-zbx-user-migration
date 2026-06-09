@@ -1,10 +1,14 @@
 <?php
 /**
  * View: usermigrate.report
- * Exibe todos os objetos vinculados a um usuario selecionado.
+ * Relatório de objetos vinculados a um usuário — multilíngue via I18n.
  */
 
-function getAuthBadgeReport(int $gui_access): array {
+use Modules\UserMigrate\I18n;
+
+$t = I18n::get();
+
+function getAuthBadgeReport2(int $gui_access): array {
     switch ($gui_access) {
         case 1:  return ['label' => 'LOCAL',    'class' => 'zbx-badge-local'];
         case 2:  return ['label' => 'LDAP',     'class' => 'zbx-badge-ldap'];
@@ -12,26 +16,21 @@ function getAuthBadgeReport(int $gui_access): array {
         default: return ['label' => 'SYSTEM',   'class' => 'zbx-badge-system'];
     }
 }
-
-$module_dir = basename(dirname(__DIR__));
 ?>
 <div class="zbx-report-wrap">
 
-    <h1 class="zbx-report-title">Relatório de Objetos do Usuário</h1>
-    <p class="zbx-report-subtitle">
-        Selecione um usuário para visualizar todos os objetos vinculados a ele no Zabbix.
-    </p>
+    <h1 class="zbx-report-title"><?= $t('User Objects Report') ?></h1>
+    <p class="zbx-report-subtitle"><?= $t('report_subtitle') ?></p>
 
-    <!-- Seletor de usuário -->
     <div class="zbx-report-form">
         <form method="get" action="zabbix.php">
             <input type="hidden" name="action" value="usermigrate.report">
             <div class="zbx-report-select-row">
-                <label for="userid">Usuário</label>
-                <select id="userid" name="userid" class="zbx-migrate-select" style="max-width:400px">
-                    <option value="">-- Selecione um usuário --</option>
+                <label for="userid"><?= $t('User') ?></label>
+                <select id="userid" name="userid" class="zbx-migrate-select" style="max-width:420px">
+                    <option value=""><?= $t('-- Select a user --') ?></option>
                     <?php foreach ($data['users'] as $u):
-                        $badge = getAuthBadgeReport((int)$u['gui_access']);
+                        $badge    = getAuthBadgeReport2((int)$u['gui_access']);
                         $selected = ($data['userid'] == $u['userid']) ? 'selected' : '';
                     ?>
                         <option value="<?= htmlspecialchars($u['userid']) ?>" <?= $selected ?>>
@@ -43,20 +42,18 @@ $module_dir = basename(dirname(__DIR__));
                         </option>
                     <?php endforeach; ?>
                 </select>
-                <button type="submit" class="btn-alt">Gerar Relatório</button>
+                <button type="submit" class="btn-alt"><?= $t('Generate Report') ?></button>
             </div>
         </form>
     </div>
 
     <?php if ($data['user_info'] && $data['report']): ?>
-
         <?php
-        $u = $data['user_info'];
-        $badge = getAuthBadgeReport((int)$u['gui_access']);
+        $u     = $data['user_info'];
+        $badge = getAuthBadgeReport2((int)$u['gui_access']);
         $total = array_sum(array_column($data['report'], 'count'));
         ?>
 
-        <!-- Cabeçalho do relatório -->
         <div class="zbx-report-header">
             <div class="zbx-report-user">
                 <strong><?= htmlspecialchars($u['username']) ?></strong>
@@ -66,24 +63,23 @@ $module_dir = basename(dirname(__DIR__));
                 <span class="zbx-migrate-badge <?= $badge['class'] ?>"><?= $badge['label'] ?></span>
             </div>
             <div class="zbx-report-summary">
-                <span class="zbx-report-total"><?= $total ?> objeto(s) vinculados</span>
+                <span class="zbx-report-total"><?= $t('linked_objects', $total) ?></span>
                 <?php if ($total === 0): ?>
-                    <span class="zbx-report-clean">✔ Usuário sem objetos vinculados — seguro para remover</span>
+                    <span class="zbx-report-clean"><?= $t('safe_to_remove') ?></span>
                 <?php else: ?>
-                    <span class="zbx-report-warn">⚠ Usuário possui objetos — considere migrar antes de remover</span>
+                    <span class="zbx-report-warn"><?= $t('has_objects_warn') ?></span>
                 <?php endif; ?>
             </div>
         </div>
 
-        <!-- Tabela de objetos -->
         <div class="zbx-report-table-wrap">
             <table class="zbx-report-table">
                 <thead>
                     <tr>
-                        <th>Entidade</th>
-                        <th>Quantidade</th>
-                        <th>Descrição</th>
-                        <th>Itens</th>
+                        <th><?= $t('Entity') ?></th>
+                        <th><?= $t('Count') ?></th>
+                        <th><?= $t('Description') ?></th>
+                        <th><?= $t('Items') ?></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -104,20 +100,20 @@ $module_dir = basename(dirname(__DIR__));
                             <td>
                                 <?php if ($section['count'] > 0 && !empty($section['items'])): ?>
                                     <details>
-                                        <summary><?= count($section['items']) ?> item(s) — clique para expandir</summary>
+                                        <summary><?= $t('items_expand', count($section['items'])) ?></summary>
                                         <ul class="zbx-report-items">
                                             <?php foreach (array_slice($section['items'], 0, 50) as $item): ?>
                                                 <li><?= htmlspecialchars((string)$item) ?></li>
                                             <?php endforeach; ?>
                                             <?php if (count($section['items']) > 50): ?>
-                                                <li><em>...e mais <?= count($section['items']) - 50 ?> itens</em></li>
+                                                <li><em><?= $t('more_items', count($section['items']) - 50) ?></em></li>
                                             <?php endif; ?>
                                         </ul>
                                     </details>
                                 <?php elseif ($section['count'] > 0): ?>
                                     <span class="zbx-report-desc">—</span>
                                 <?php else: ?>
-                                    <span class="zbx-report-desc">Nenhum</span>
+                                    <span class="zbx-report-desc"><?= $t('None') ?></span>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -126,16 +122,15 @@ $module_dir = basename(dirname(__DIR__));
             </table>
         </div>
 
-        <!-- Acao rapida -->
         <?php if ($total > 0): ?>
         <div class="zbx-report-action">
-            <p>Este usuário possui objetos vinculados. Use o módulo de <strong>Migração de Usuário</strong> para transferi-los antes de remover a conta.</p>
-            <a href="zabbix.php?action=usermigrate.view" class="btn-alt">Ir para Migração de Usuário</a>
+            <p><?= $t('report_action_msg') ?></p>
+            <a href="zabbix.php?action=usermigrate.view" class="btn-alt"><?= $t('Go to User Migration') ?></a>
         </div>
         <?php endif; ?>
 
     <?php elseif ($data['userid'] && !$data['user_info']): ?>
-        <div class="zbx-report-error">Usuário não encontrado.</div>
+        <div class="zbx-report-error"><?= $t('User not found.') ?></div>
     <?php endif; ?>
 
 </div>

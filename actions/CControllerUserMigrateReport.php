@@ -2,6 +2,8 @@
 
 namespace Modules\UserMigrate\Actions;
 
+use Modules\UserMigrate\I18n;
+
 use CController;
 use CControllerResponseData;
 use CRoleHelper;
@@ -75,10 +77,10 @@ class CControllerUserMigrateReport extends CController {
             'SELECT name FROM dashboard WHERE userid=' . zbx_dbstr($userid) . ' AND templateid IS NULL'
         ));
         $sections[] = [
-            'entity'      => 'Dashboards',
+            'entity' => I18n::get()('Dashboards'),
             'icon'        => '📊',
             'count'       => count($rows),
-            'description' => 'Dashboards criados pelo usuário',
+            'description' => I18n::get()('dash_desc'),
             'items'       => array_column($rows, 'name')
         ];
 
@@ -89,10 +91,10 @@ class CControllerUserMigrateReport extends CController {
             ' WHERE du.userid=' . zbx_dbstr($userid)
         ));
         $sections[] = [
-            'entity'      => 'Permissões de Dashboard',
+            'entity' => I18n::get()('Dashboard Permissions'),
             'icon'        => '🔑',
             'count'       => count($rows),
-            'description' => 'Dashboards compartilhados com este usuário',
+            'description' => I18n::get()('dash_perm_desc'),
             'items'       => array_column($rows, 'name')
         ];
 
@@ -101,10 +103,10 @@ class CControllerUserMigrateReport extends CController {
             'SELECT name FROM sysmaps WHERE userid=' . zbx_dbstr($userid)
         ));
         $sections[] = [
-            'entity'      => 'Mapas de Rede',
+            'entity' => I18n::get()('Network Maps'),
             'icon'        => '🗺️',
             'count'       => count($rows),
-            'description' => 'Mapas de rede criados pelo usuário',
+            'description' => I18n::get()('map_desc'),
             'items'       => array_column($rows, 'name')
         ];
 
@@ -115,10 +117,10 @@ class CControllerUserMigrateReport extends CController {
             ' WHERE su.userid=' . zbx_dbstr($userid)
         ));
         $sections[] = [
-            'entity'      => 'Permissões de Mapa',
+            'entity' => I18n::get()('Map Permissions'),
             'icon'        => '🔑',
             'count'       => count($rows),
-            'description' => 'Mapas compartilhados com este usuário',
+            'description' => I18n::get()('map_perm_desc'),
             'items'       => array_column($rows, 'name')
         ];
 
@@ -127,10 +129,10 @@ class CControllerUserMigrateReport extends CController {
             'SELECT name FROM report WHERE userid=' . zbx_dbstr($userid)
         ));
         $sections[] = [
-            'entity'      => 'Relatórios Agendados',
+            'entity' => I18n::get()('Scheduled Reports'),
             'icon'        => '📋',
             'count'       => count($rows),
-            'description' => 'Relatórios agendados criados pelo usuário',
+            'description' => I18n::get()('report_desc'),
             'items'       => array_column($rows, 'name')
         ];
 
@@ -141,10 +143,10 @@ class CControllerUserMigrateReport extends CController {
             ' WHERE ru.userid=' . zbx_dbstr($userid)
         ));
         $sections[] = [
-            'entity'      => 'Destinatários de Relatório',
+            'entity' => I18n::get()('Report Recipients'),
             'icon'        => '📨',
             'count'       => count($rows),
-            'description' => 'Relatórios dos quais este usuário é destinatário',
+            'description' => I18n::get()('report_recip_desc'),
             'items'       => array_column($rows, 'name')
         ];
 
@@ -153,10 +155,10 @@ class CControllerUserMigrateReport extends CController {
             'SELECT sendto FROM media WHERE userid=' . zbx_dbstr($userid)
         ));
         $sections[] = [
-            'entity'      => 'Mídias de Notificação',
+            'entity' => I18n::get()('Notification Media'),
             'icon'        => '🔔',
             'count'       => count($rows),
-            'description' => 'Configurações de e-mail, SMS, webhook, etc',
+            'description' => I18n::get()('media_desc'),
             'items'       => array_column($rows, 'sendto')
         ];
 
@@ -167,10 +169,10 @@ class CControllerUserMigrateReport extends CController {
             ' WHERE o.userid=' . zbx_dbstr($userid)
         ));
         $sections[] = [
-            'entity'      => 'Destinatários de Action',
+            'entity' => I18n::get()('Action Recipients'),
             'icon'        => '⚡',
             'count'       => count($rows),
-            'description' => 'Operações de Trigger Actions onde é destinatário',
+            'description' => I18n::get()('action_desc'),
             'items'       => array_map(fn($r) => 'Operation ID: ' . $r['operationid'], $rows)
         ];
 
@@ -179,10 +181,10 @@ class CControllerUserMigrateReport extends CController {
             'SELECT name FROM token WHERE userid=' . zbx_dbstr($userid)
         ));
         $sections[] = [
-            'entity'      => 'API Tokens',
+            'entity' => I18n::get()('API Tokens'),
             'icon'        => '🔐',
             'count'       => count($rows),
-            'description' => 'Tokens de API gerados pelo usuário',
+            'description' => I18n::get()('token_desc'),
             'items'       => array_column($rows, 'name')
         ];
 
@@ -193,10 +195,10 @@ class CControllerUserMigrateReport extends CController {
             ' WHERE ug.userid=' . zbx_dbstr($userid)
         ));
         $sections[] = [
-            'entity'      => 'Grupos de Usuário',
+            'entity' => I18n::get()('User Groups'),
             'icon'        => '👥',
             'count'       => count($rows),
-            'description' => 'Grupos aos quais o usuário pertence',
+            'description' => I18n::get()('group_desc'),
             'items'       => array_column($rows, 'name')
         ];
 
@@ -205,10 +207,10 @@ class CControllerUserMigrateReport extends CController {
             'SELECT COUNT(*) AS cnt FROM profiles WHERE userid=' . zbx_dbstr($userid)
         ));
         $sections[] = [
-            'entity'      => 'Preferências de Interface',
+            'entity' => I18n::get()('Interface Preferences'),
             'icon'        => '⚙️',
             'count'       => (int)($row['cnt'] ?? 0),
-            'description' => 'Filtros salvos, colunas e configurações de UI',
+            'description' => I18n::get()('pref_desc'),
             'items'       => []
         ];
 
@@ -222,10 +224,10 @@ class CControllerUserMigrateReport extends CController {
         ));
         if ($rows) {
             $sections[] = [
-                'entity'      => 'Histórico de Migrações',
+                'entity' => I18n::get()('Migration History'),
                 'icon'        => '📜',
                 'count'       => count($rows),
-                'description' => 'Operações de migração registradas no auditlog',
+                'description' => I18n::get()('history_desc'),
                 'items'       => array_map(fn($r) => date('d/m/Y H:i', $r['clock']) . ' — ' . $r['details'], $rows)
             ];
         }
