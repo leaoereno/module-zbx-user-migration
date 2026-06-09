@@ -169,9 +169,8 @@ class CControllerUserMigrateExecute extends CController {
 
             foreach ($src_groups as $g) {
                 if (!in_array($g['usrgrpid'], $dst_gids)) {
-                    // Gera novo id seguro para users_groups
-                    $max_row = DBfetch(DBselect('SELECT MAX(id) AS maxid FROM users_groups'));
-                    $new_id  = (int)($max_row['maxid'] ?? 0) + 1;
+                    // Usa DBgetNextId para gerar ID sem colisao com o Zabbix
+                    $new_id = DBgetNextId('users_groups', 'id');
 
                     DBexecute(
                         'INSERT INTO users_groups (id, userid, usrgrpid)' .
