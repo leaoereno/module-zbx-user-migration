@@ -27,7 +27,7 @@ class CControllerUserMigratePreview extends CController {
     }
 
     protected function checkPermissions(): bool {
-        return $this->checkAccess(CRoleHelper::UI_ADMINISTRATION_USERS);
+        return in_array(\CWebUser::$data['type'], [USER_TYPE_ZABBIX_ADMIN, USER_TYPE_SUPER_ADMIN]);
     }
 
     protected function doAction(): void {
@@ -59,14 +59,31 @@ class CControllerUserMigratePreview extends CController {
             return;
         }
 
+        // Aviso extra se usuario de origem for Admin nativo
+        $warnings = [];
+        if ((int)$src === 1) {
+            $warnings[] = 'ATENÇÃO: O usuário de origem é o Admin nativo (ID 1). A migração será bloqueada na execução.';
+        }
+
+        // Aviso se usuario de origem tiver role privilegiada
+        $role_row = DBfetch(DBselect(
+            'SELECT r.name FROM users u' .
+            ' JOIN role r ON r.roleid = u.roleid' .
+            ' WHERE u.userid=' . zbx_dbstr($src)
+        ));
+        if ($role_row && stripos($role_row['name'], 'super') !== false) {
+            $warnings[] = 'ATENÇÃO: O usuário de origem possui role de Super Admin (' . $role_row['name'] . '). Revise antes de confirmar.';
+        }
+
         $preview = $this->buildPreview($src, $dst);
 
         $this->setResponse(new CControllerResponseData([
             'main_block' => json_encode([
-                'success' => true,
+                'success'  => true,
                 'user_src' => $user_src,
                 'user_dst' => $user_dst,
                 'preview'  => $preview,
+                'warnings' => $warnings,
                 'total'    => array_sum(array_column($preview, 'count'))
             ])
         ]));
@@ -84,27 +101,21 @@ class CControllerUserMigratePreview extends CController {
         if ($rows) {
             $sections[] = [
                 'entity'      => 'Dashboards',
-                'table'       => 'dashboard',
-                'field'       => 'userid',
-                'pk'          => 'dashboardid',
                 'count'       => count($rows),
                 'description' => 'Transfere a propriedade do dashboard para o usuário destino.',
                 'items'       => array_column($rows, 'name')
             ];
         }
 
-        // ── Dashboards (permissões compartilhadas) ──────────────────────────
+        // ── Dashboards (permissoes compartilhadas) ──────────────────────────
         $rows = DBfetchArray(DBselect(
             'SELECT du.dashboard_userid, d.name FROM dashboard_user du' .
-            ' JOIN dashboard d ON d.dashboardid=du.dashboardid' .
+            ' JOIN dashboard d ON d.dashboardid = du.dashboardid' .
             ' WHERE du.userid=' . zbx_dbstr($src)
         ));
         if ($rows) {
             $sections[] = [
                 'entity'      => 'Permissões de Dashboard',
-                'table'       => 'dashboard_user',
-                'field'       => 'userid',
-                'pk'          => 'dashboard_userid',
                 'count'       => count($rows),
                 'description' => 'Reatribui as permissões de acesso a dashboards compartilhados.',
                 'items'       => array_column($rows, 'name')
@@ -113,103 +124,82 @@ class CControllerUserMigratePreview extends CController {
 
         // ── Mapas de rede (ownership) ───────────────────────────────────────
         $rows = DBfetchArray(DBselect(
-            'SELECT sysmapid, name FROM sysmaps' .
-            ' WHERE userid=' . zbx_dbstr($src)
+            'SELECT sysmapid, name FROM sysmaps WHERE userid=' . zbx_dbstr($src)
         ));
         if ($rows) {
             $sections[] = [
                 'entity'      => 'Mapas de Rede',
-                'table'       => 'sysmaps',
-                'field'       => 'userid',
-                'pk'          => 'sysmapid',
                 'count'       => count($rows),
                 'description' => 'Transfere a propriedade dos mapas de rede.',
                 'items'       => array_column($rows, 'name')
             ];
         }
 
-        // ── Mapas de rede (permissões compartilhadas) ───────────────────────
+        // ── Mapas de rede (permissoes compartilhadas) ───────────────────────
         $rows = DBfetchArray(DBselect(
-            'SELECT su.sysmap_userid, s.name FROM sysmap_user su' .
-            ' JOIN sysmaps s ON s.sysmapid=su.sysmapid' .
+            'SELECT su.sysmapuserid, s.name FROM sysmap_user su' .
+            ' JOIN sysmaps s ON s.sysmapid = su.sysmapid' .
             ' WHERE su.userid=' . zbx_dbstr($src)
         ));
         if ($rows) {
             $sections[] = [
                 'entity'      => 'Permissões de Mapa',
-                'table'       => 'sysmap_user',
-                'field'       => 'userid',
-                'pk'          => 'sysmap_userid',
                 'count'       => count($rows),
                 'description' => 'Reatribui as permissões de acesso a mapas compartilhados.',
                 'items'       => array_column($rows, 'name')
             ];
         }
 
-        // ── Relatórios agendados ────────────────────────────────────────────
+        // ── Relatorios agendados ────────────────────────────────────────────
         $rows = DBfetchArray(DBselect(
-            'SELECT reportid, name FROM report' .
-            ' WHERE userid=' . zbx_dbstr($src)
+            'SELECT reportid, name FROM report WHERE userid=' . zbx_dbstr($src)
         ));
         if ($rows) {
             $sections[] = [
                 'entity'      => 'Relatórios Agendados',
-                'table'       => 'report',
-                'field'       => 'userid',
-                'pk'          => 'reportid',
                 'count'       => count($rows),
                 'description' => 'Transfere a propriedade dos relatórios agendados.',
                 'items'       => array_column($rows, 'name')
             ];
         }
 
-        // ── Relatórios (destinatários) ──────────────────────────────────────
+        // ── Relatorios (destinatarios) ──────────────────────────────────────
         $rows = DBfetchArray(DBselect(
-            'SELECT ru.report_userid, r.name FROM report_user ru' .
-            ' JOIN report r ON r.reportid=ru.reportid' .
+            'SELECT ru.reportuserid, r.name FROM report_user ru' .
+            ' JOIN report r ON r.reportid = ru.reportid' .
             ' WHERE ru.userid=' . zbx_dbstr($src)
         ));
         if ($rows) {
             $sections[] = [
                 'entity'      => 'Destinatários de Relatório',
-                'table'       => 'report_user',
-                'field'       => 'userid',
-                'pk'          => 'report_userid',
                 'count'       => count($rows),
                 'description' => 'Reatribui o usuário como destinatário dos relatórios.',
                 'items'       => array_column($rows, 'name')
             ];
         }
 
-        // ── Mídias de notificação ───────────────────────────────────────────
+        // ── Midias de notificacao ───────────────────────────────────────────
         $rows = DBfetchArray(DBselect(
-            'SELECT mediaid, sendto FROM media' .
-            ' WHERE userid=' . zbx_dbstr($src)
+            'SELECT mediaid, sendto FROM media WHERE userid=' . zbx_dbstr($src)
         ));
         if ($rows) {
             $sections[] = [
                 'entity'      => 'Mídias de Notificação',
-                'table'       => 'media',
-                'field'       => 'userid',
-                'pk'          => 'mediaid',
                 'count'       => count($rows),
                 'description' => 'Transfere as configurações de mídia (e-mail, SMS, etc).',
                 'items'       => array_column($rows, 'sendto')
             ];
         }
 
-        // ── Action operations (destinatário de mensagem) ────────────────────
+        // ── Action operations ───────────────────────────────────────────────
         $rows = DBfetchArray(DBselect(
             'SELECT o.opmessage_usrid, op.operationid FROM opmessage_usr o' .
-            ' JOIN operations op ON op.operationid=o.operationid' .
+            ' JOIN operations op ON op.operationid = o.operationid' .
             ' WHERE o.userid=' . zbx_dbstr($src)
         ));
         if ($rows) {
             $sections[] = [
                 'entity'      => 'Destinatários de Action (Trigger)',
-                'table'       => 'opmessage_usr',
-                'field'       => 'userid',
-                'pk'          => 'opmessage_usrid',
                 'count'       => count($rows),
                 'description' => 'Substitui o usuário como destinatário em operações de Actions.',
                 'items'       => array_map(fn($r) => 'Operation ID: ' . $r['operationid'], $rows)
@@ -218,42 +208,33 @@ class CControllerUserMigratePreview extends CController {
 
         // ── API Tokens ──────────────────────────────────────────────────────
         $rows = DBfetchArray(DBselect(
-            'SELECT tokenid, name FROM token' .
-            ' WHERE userid=' . zbx_dbstr($src)
+            'SELECT tokenid, name FROM token WHERE userid=' . zbx_dbstr($src)
         ));
         if ($rows) {
             $sections[] = [
                 'entity'      => 'API Tokens',
-                'table'       => 'token',
-                'field'       => 'userid',
-                'pk'          => 'tokenid',
                 'count'       => count($rows),
                 'description' => 'Transfere os tokens de API para o usuário destino.',
                 'items'       => array_column($rows, 'name')
             ];
         }
 
-        // ── Grupos de usuário ───────────────────────────────────────────────
-        $rows = DBfetchArray(DBselect(
-            'SELECT ug.id, g.name FROM users_groups ug' .
-            ' JOIN usrgrp g ON g.usrgrpid=ug.usrgrpid' .
+        // ── Grupos de usuario ───────────────────────────────────────────────
+        $src_groups = DBfetchArray(DBselect(
+            'SELECT ug.usrgrpid, g.name FROM users_groups ug' .
+            ' JOIN usrgrp g ON g.usrgrpid = ug.usrgrpid' .
             ' WHERE ug.userid=' . zbx_dbstr($src)
         ));
-        if ($rows) {
-            // Filtra grupos que o destino já tem
+        if ($src_groups) {
             $dst_groups = DBfetchArray(DBselect(
                 'SELECT usrgrpid FROM users_groups WHERE userid=' . zbx_dbstr($dst)
             ));
-            $dst_group_ids = array_column($dst_groups, 'usrgrpid');
-
-            $to_add = array_filter($rows, fn($r) => !in_array($r['usrgrpid'] ?? '', $dst_group_ids));
+            $dst_gids  = array_column($dst_groups, 'usrgrpid');
+            $to_add    = array_filter($src_groups, fn($g) => !in_array($g['usrgrpid'], $dst_gids));
 
             if ($to_add) {
                 $sections[] = [
                     'entity'      => 'Grupos de Usuário',
-                    'table'       => 'users_groups',
-                    'field'       => 'userid',
-                    'pk'          => 'id',
                     'count'       => count($to_add),
                     'description' => 'Adiciona o usuário destino nos mesmos grupos do usuário origem (grupos já existentes são ignorados).',
                     'items'       => array_column(array_values($to_add), 'name')
@@ -261,39 +242,27 @@ class CControllerUserMigratePreview extends CController {
             }
         }
 
-        // ── Perfil / Preferências ───────────────────────────────────────────
+        // ── Preferencias de interface ───────────────────────────────────────
         $rows = DBfetchArray(DBselect(
-            'SELECT profileid, idx FROM profiles' .
-            ' WHERE userid=' . zbx_dbstr($src)
+            'SELECT profileid, idx FROM profiles WHERE userid=' . zbx_dbstr($src)
         ));
         if ($rows) {
             $sections[] = [
                 'entity'      => 'Preferências de Interface',
-                'table'       => 'profiles',
-                'field'       => 'userid',
-                'pk'          => 'profileid',
                 'count'       => count($rows),
-                'description' => 'Migra as preferências de interface (filtros salvos, colunas, etc). Preferências existentes no destino serão mantidas.',
+                'description' => 'Migra as preferências de interface (filtros salvos, colunas, etc). Preferências existentes no destino são preservadas.',
                 'items'       => array_unique(array_map(fn($r) => explode('.', $r['idx'])[0], $rows))
             ];
         }
 
-        // ── Módulo Plantão — Phones ─────────────────────────────────────────
-        $has_plantao = DBfetch(DBselect(
-            "SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.TABLES" .
-            " WHERE TABLE_SCHEMA='zabbix' AND TABLE_NAME='module_plantao_phones'"
-        ));
-        if ($has_plantao && (int)$has_plantao['cnt'] > 0) {
+        // ── Plantao — Phones ────────────────────────────────────────────────
+        if ($this->tableExists('module_plantao_phones')) {
             $rows = DBfetchArray(DBselect(
-                'SELECT id, phone FROM module_plantao_phones' .
-                ' WHERE userid=' . zbx_dbstr($src)
+                'SELECT userid, phone FROM module_plantao_phones WHERE userid=' . zbx_dbstr($src)
             ));
             if ($rows) {
                 $sections[] = [
                     'entity'      => 'Plantão — Telefones',
-                    'table'       => 'module_plantao_phones',
-                    'field'       => 'userid',
-                    'pk'          => 'id',
                     'count'       => count($rows),
                     'description' => 'Transfere os registros de telefone do módulo de plantão.',
                     'items'       => array_column($rows, 'phone')
@@ -301,29 +270,30 @@ class CControllerUserMigratePreview extends CController {
             }
         }
 
-        // ── Módulo Plantão — Schedule ───────────────────────────────────────
-        $has_schedule = DBfetch(DBselect(
-            "SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.TABLES" .
-            " WHERE TABLE_SCHEMA='zabbix' AND TABLE_NAME='module_plantao_schedule'"
-        ));
-        if ($has_schedule && (int)$has_schedule['cnt'] > 0) {
+        // ── Plantao — Schedule ──────────────────────────────────────────────
+        if ($this->tableExists('module_plantao_schedule')) {
             $rows = DBfetchArray(DBselect(
-                'SELECT id FROM module_plantao_schedule' .
-                ' WHERE userid=' . zbx_dbstr($src)
+                'SELECT scheduleid FROM module_plantao_schedule WHERE userid=' . zbx_dbstr($src)
             ));
             if ($rows) {
                 $sections[] = [
                     'entity'      => 'Plantão — Escalas',
-                    'table'       => 'module_plantao_schedule',
-                    'field'       => 'userid',
-                    'pk'          => 'id',
                     'count'       => count($rows),
                     'description' => 'Transfere as escalas de plantão vinculadas ao usuário.',
-                    'items'       => array_map(fn($r) => 'Escala ID: ' . $r['id'], $rows)
+                    'items'       => array_map(fn($r) => 'Escala ID: ' . $r['scheduleid'], $rows)
                 ];
             }
         }
 
         return $sections;
+    }
+
+    private function tableExists(string $table): bool {
+        $row = DBfetch(DBselect(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES" .
+            " WHERE TABLE_SCHEMA = DATABASE()" .
+            " AND TABLE_NAME = " . zbx_dbstr($table)
+        ));
+        return $row && (int)$row['cnt'] > 0;
     }
 }

@@ -17,7 +17,7 @@ class CControllerUserMigrateView extends CController {
     }
 
     protected function checkPermissions(): bool {
-        return $this->checkAccess(CRoleHelper::UI_ADMINISTRATION_USERS);
+        return in_array(\CWebUser::$data['type'], [USER_TYPE_ZABBIX_ADMIN, USER_TYPE_SUPER_ADMIN]);
     }
 
     protected function doAction(): void {

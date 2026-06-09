@@ -12,12 +12,14 @@ class CControllerUserMigrateExecute extends CController {
 
     protected function init(): void {
         $this->disableCsrfValidation();
+        error_reporting(E_ALL);
+        ini_set("log_errors", "1");
     }
 
     protected function checkInput(): bool {
         $fields = [
-            'userid_src' => 'required|db users.userid',
-            'userid_dst' => 'required|db users.userid',
+            'userid_src'  => 'required|db users.userid',
+            'userid_dst'  => 'required|db users.userid',
         ];
 
         $ret = $this->validateInput($fields);
@@ -28,7 +30,7 @@ class CControllerUserMigrateExecute extends CController {
     }
 
     protected function checkPermissions(): bool {
-        return $this->checkAccess(CRoleHelper::UI_ADMINISTRATION_USERS);
+        return in_array(\CWebUser::$data['type'], [USER_TYPE_ZABBIX_ADMIN, USER_TYPE_SUPER_ADMIN]);
     }
 
     protected function doAction(): void {
@@ -82,7 +84,7 @@ class CControllerUserMigrateExecute extends CController {
         $migrated = [];
         $errors    = [];
 
-        DBbegin();
+        DBstart();
 
         try {
             // ── 1. Dashboards (ownership) ───────────────────────────────────
@@ -178,33 +180,34 @@ class CControllerUserMigrateExecute extends CController {
             }
             if ($added_groups > 0) $migrated[] = "{$added_groups} grupo(s) de usuário";
 
-            // ── 11. Preferencias de interface ───────────────────────────────
-            $dst_profiles = DBfetchArray(DBselect(
-                'SELECT idx FROM profiles WHERE userid=' . zbx_dbstr($dst)
-            ));
-            $dst_idxs = array_column($dst_profiles, 'idx');
-
-            $src_profiles = DBfetchArray(DBselect(
-                'SELECT * FROM profiles WHERE userid=' . zbx_dbstr($src)
-            ));
-            $added_profiles = 0;
-
-            foreach ($src_profiles as $p) {
-                if (!in_array($p['idx'], $dst_idxs)) {
-                    DBexecute(
-                        'UPDATE profiles SET userid=' . zbx_dbstr($dst) .
-                        ' WHERE profileid=' . zbx_dbstr($p['profileid'])
-                    );
-                    $added_profiles++;
-                }
-            }
-            if ($added_profiles > 0) $migrated[] = "{$added_profiles} preferência(s) de interface";
+            // ── 11. Preferencias de interface — UPDATE em batch
+            DBexecute(
+                'UPDATE profiles p SET p.userid=' . zbx_dbstr($dst) .
+                ' WHERE p.userid=' . zbx_dbstr($src) .
+                ' AND p.idx NOT IN (SELECT idx FROM (SELECT idx FROM profiles WHERE userid=' . zbx_dbstr($dst) . ') AS dst_idx)'
+            );
+            $migrated[] = "preferencias de interface";
 
             // ── 12. Plantao — Phones ────────────────────────────────────────
             if ($this->tableExists('module_plantao_phones')) {
-                $count = $this->migrateSimple('module_plantao_phones', 'userid',
-                    'userid=' . zbx_dbstr($src), $dst);
-                if ($count > 0) $migrated[] = "{$count} telefone(s) de plantão";
+                // userid e PK em module_plantao_phones — usa INSERT/DELETE
+                // para evitar duplicate key se destino ja tiver registro
+                $phones = DBfetchArray(DBselect(
+                    'SELECT phone FROM module_plantao_phones WHERE userid=' . zbx_dbstr($src)
+                ));
+                $dst_phone = DBfetch(DBselect(
+                    'SELECT userid FROM module_plantao_phones WHERE userid=' . zbx_dbstr($dst)
+                ));
+                if ($phones && !$dst_phone) {
+                    DBexecute(
+                        'UPDATE module_plantao_phones SET userid=' . zbx_dbstr($dst) .
+                        ' WHERE userid=' . zbx_dbstr($src)
+                    );
+                    $migrated[] = count($phones) . ' telefone(s) de plantão';
+                } elseif ($phones && $dst_phone) {
+                    // Destino ja tem registro — apenas remove o origem
+                    DBexecute('DELETE FROM module_plantao_phones WHERE userid=' . zbx_dbstr($src));
+                }
             }
 
             // ── 13. Plantao — Schedule ──────────────────────────────────────
@@ -217,10 +220,10 @@ class CControllerUserMigrateExecute extends CController {
             // ── Auditoria no formato nativo do Zabbix ───────────────────────
             $this->writeAuditLog($src, $dst, $user_src, $user_dst, $migrated);
 
-            DBcommit();
+            DBend(true);
 
         } catch (\Exception $e) {
-            DBrollback();
+            DBend(false);
             $this->setResponse(new CControllerResponseData([
                 'main_block' => json_encode([
                     'error' => [
