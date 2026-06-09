@@ -18,6 +18,10 @@ class Module extends CModule {
             ->add(
                 (new CMenuItem(_('User Migration')))
                     ->setAction('usermigrate.view')
+            )
+            ->add(
+                (new CMenuItem(_('User Objects Report')))
+                    ->setAction('usermigrate.report')
             );
     }
 }

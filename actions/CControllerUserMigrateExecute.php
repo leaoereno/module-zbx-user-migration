@@ -227,23 +227,39 @@ class CControllerUserMigrateExecute extends CController {
             $this->setResponse(new CControllerResponseData([
                 'main_block' => json_encode([
                     'error' => [
-                        'title'    => 'Erro durante a migração. Nenhuma alteração foi salva.',
-                        'messages' => [$e->getMessage()]
+                        'title'    => 'Migração falhou — nenhuma alteração foi salva.',
+                        'messages' => [
+                            $e->getMessage(),
+                            'Todas as alterações foram revertidas automaticamente (rollback).',
+                            'Verifique os logs do servidor para mais detalhes.'
+                        ]
                     ]
                 ])
             ]));
             return;
         }
 
-        $summary = empty($migrated)
-            ? 'Nenhum objeto encontrado para migrar.'
-            : implode(', ', $migrated) . ' migrado(s) com sucesso.';
+        if (empty($migrated)) {
+            $this->setResponse(new CControllerResponseData([
+                'main_block' => json_encode([
+                    'success' => [
+                        'title'    => "Migração concluída: {$user_src['username']} → {$user_dst['username']}",
+                        'messages' => ['Nenhum objeto encontrado para migrar no usuário de origem.']
+                    ]
+                ])
+            ]));
+            return;
+        }
+
+        // Monta resumo detalhado por categoria
+        $summary_lines = $migrated;
+        $summary_lines[] = 'Total: ' . array_sum(array_map(fn($m) => (int)preg_replace('/[^0-9]/', '', $m), $migrated)) . ' objeto(s) transferido(s).';
 
         $this->setResponse(new CControllerResponseData([
             'main_block' => json_encode([
                 'success' => [
-                    'title'    => "Migração concluída: {$user_src['username']} → {$user_dst['username']}",
-                    'messages' => [$summary]
+                    'title'    => "✔ Migração concluída com sucesso: {$user_src['username']} → {$user_dst['username']}",
+                    'messages' => $summary_lines
                 ]
             ])
         ]));

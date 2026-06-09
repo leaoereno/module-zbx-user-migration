@@ -392,9 +392,20 @@ function getAuthBadge(int $gui_access): array {
     // ── Resultado ────────────────────────────────────────────────────────────
     function showResult(type, title, messages) {
         const cls  = type === 'success' ? 'zbx-migrate-result-ok' : 'zbx-migrate-result-err';
-        const msgs = messages.length
-            ? '<ul style="margin:6px 0 0 16px">' + messages.map(m => '<li>' + escHtml(m) + '</li>').join('') + '</ul>'
-            : '';
+        let msgs = '';
+        if (messages.length) {
+            if (type === 'success') {
+                // Exibe cada item migrado como badge colorido
+                const items = messages.slice(0, -1); // exclui linha de total
+                const total = messages[messages.length - 1]; // ultima linha e o total
+                msgs = '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">' +
+                    items.map(m => '<span style="background:#0a4f2e;color:#fff;padding:2px 10px;border-radius:10px;font-size:12px">' + escHtml(m) + '</span>').join('') +
+                    '</div>';
+                if (total) msgs += '<div style="margin-top:8px;font-size:12px;font-weight:600">' + escHtml(total) + '</div>';
+            } else {
+                msgs = '<ul style="margin:6px 0 0 16px">' + messages.map(m => '<li>' + escHtml(m) + '</li>').join('') + '</ul>';
+            }
+        }
         divResult.innerHTML = '<div class="' + cls + '"><strong>' + escHtml(title) + '</strong>' + msgs + '</div>';
         divResult.style.display = '';
         divResult.scrollIntoView({ behavior: 'smooth', block: 'start' });
