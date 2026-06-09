@@ -170,7 +170,7 @@ class CControllerUserMigrateExecute extends CController {
             foreach ($src_groups as $g) {
                 if (!in_array($g['usrgrpid'], $dst_gids)) {
                     // Usa DBgetNextId para gerar ID sem colisao com o Zabbix
-                    $new_id = DBgetNextId('users_groups', 'id');
+                    $new_id = \DB::reserveIds('users_groups', 1);
 
                     DBexecute(
                         'INSERT INTO users_groups (id, userid, usrgrpid)' .
@@ -255,12 +255,12 @@ class CControllerUserMigrateExecute extends CController {
 
         // Monta resumo detalhado por categoria
         $summary_lines = $migrated;
-        $summary_lines[] = I18n::get()('migration_total', array_sum(array_map(fn(\$m) => (int)preg_replace('/[^0-9]/', '', \$m), \$migrated)));
+        $summary_lines[] = I18n::get()('migration_total', array_sum(array_map(fn($m) => (int)preg_replace('/[^0-9]/', '', $m), $migrated)));
 
         $this->setResponse(new CControllerResponseData([
             'main_block' => json_encode([
                 'success' => [
-                    'title'    => I18n::get()('migration_success', \$user_src['username'], \$user_dst['username']),
+                    'title'    => I18n::get()('migration_success', $user_src['username'], $user_dst['username']),
                     'messages' => $summary_lines
                 ]
             ])

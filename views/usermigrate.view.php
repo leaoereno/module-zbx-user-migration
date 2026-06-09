@@ -349,21 +349,43 @@ const ZBX_MIGRATE_I18N = <?= json_encode([
     });
 
     function showResult(type, title, messages) {
-        const cls = type === 'success' ? 'zbx-migrate-result-ok' : 'zbx-migrate-result-err';
-        let msgs = '';
-        if (messages.length) {
-            if (type === 'success') {
-                const items = messages.slice(0, -1);
-                const total = messages[messages.length - 1];
-                msgs = '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">' +
-                    items.map(m => '<span style="background:#0a4f2e;color:#fff;padding:2px 10px;border-radius:10px;font-size:12px">' + escHtml(m) + '</span>').join('') +
-                    '</div>';
-                if (total) msgs += '<div style="margin-top:8px;font-size:12px;font-weight:600">' + escHtml(total) + '</div>';
-            } else {
-                msgs = '<ul style="margin:6px 0 0 16px">' + messages.map(m => '<li>' + escHtml(m) + '</li>').join('') + '</ul>';
-            }
+        if (type === 'success') {
+            // Separa itens migrados do total (ultima linha)
+            const items = messages.filter((m, i) => i < messages.length - 1 && m);
+            const total = messages[messages.length - 1] || '';
+
+            // Badges coloridos para cada entidade migrada
+            const badgesHtml = items.length
+                ? '<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">' +
+                  items.map(m => '<span style="background:#155724;color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">✔ ' + escHtml(m) + '</span>').join('') +
+                  '</div>'
+                : '';
+
+            const totalHtml = total
+                ? '<div style="margin-top:12px;padding-top:10px;border-top:1px solid #a3cfbb;font-size:13px;font-weight:700;color:#0a4f2e">' + escHtml(total) + '</div>'
+                : '';
+
+            divResult.innerHTML =
+                '<div style="background:#d1e7dd;border:1px solid #a3cfbb;border-radius:6px;padding:18px 20px;margin-top:16px">' +
+                '<div style="display:flex;align-items:center;gap:10px;font-size:15px;font-weight:700;color:#0a4f2e">' +
+                '<span style="font-size:20px">✔</span>' + escHtml(title) +
+                '</div>' +
+                badgesHtml +
+                totalHtml +
+                '</div>';
+        } else {
+            const msgs = messages.length
+                ? '<ul style="margin:8px 0 0 18px;padding:0">' +
+                  messages.map(m => '<li style="margin:4px 0;font-size:13px">' + escHtml(m) + '</li>').join('') +
+                  '</ul>'
+                : '';
+            divResult.innerHTML =
+                '<div style="background:#f8d7da;border:1px solid #f1aeb5;border-radius:6px;padding:18px 20px;margin-top:16px">' +
+                '<div style="display:flex;align-items:center;gap:10px;font-size:15px;font-weight:700;color:#58151c">' +
+                '<span style="font-size:20px">✖</span>' + escHtml(title) +
+                '</div>' + msgs +
+                '</div>';
         }
-        divResult.innerHTML = '<div class="' + cls + '"><strong>' + escHtml(title) + '</strong>' + msgs + '</div>';
         divResult.style.display = '';
         divResult.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
