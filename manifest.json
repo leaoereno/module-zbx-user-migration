@@ -3,8 +3,8 @@
     "id": "zbx-user-migrate",
     "name": "User Migration",
     "version": "1.1.0",
-    "author": "Rafael Leão",
-    "url": "https://github.com/leaoereno/module-zbx-user-migration",
+    "author": "Rafael M. A. Leão Ereno - MALE",
+    "url": "https://www.linkedin.com/in/leaoereno/",
     "description": "Migrates all owned objects (dashboards, maps, reports, media, actions) from a local user to an LDAP-provisioned user.",
     "namespace": "UserMigrate",
     "actions": {

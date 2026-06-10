@@ -356,10 +356,10 @@ module-zbx-user-migration/
 ---
 
 ## Créditos
-
-- **Autor:** Rafael M. A. Leão Ereno (MALE)
+- **Mantenedor do fork:** Rafael M. A. Leão Ereno (MALE)
 - **LinkedIn:** https://www.linkedin.com/in/leaoereno/
-- **GitHub:** https://github.com/leaoereno
+- **Projeto original:** NOC Team
+- **Inspirado no projeto da Monzphere**
 
 ---
 
