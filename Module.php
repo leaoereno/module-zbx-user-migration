@@ -15,63 +15,44 @@ class Module extends CModule {
 
         // Exibe o menu apenas para Admin (type=2) e Super Admin (type=3).
         // Usuários com perfil User (type=1) não devem ver estas opções.
-        $userType = (int) CWebUser::$data['type'];
+        $userType = (int) CWebUser::getType();
 
         if (!in_array($userType, [USER_TYPE_ZABBIX_ADMIN, USER_TYPE_SUPER_ADMIN])) {
             return;
         }
 
-        $mainMenu = APP::Component()->get('menu.main');
+        $menu = APP::Component()->get('menu.main');
 
-        // Busca o item de menu nativo "Usuários" iterando pelos itens do menu principal.
-        // Usar findOrAdd(_('Users')) direto causa bug para perfil Admin: o Zabbix registra
-        // "Usuários" de forma diferente por perfil, e a busca por label falha — criando
-        // um item duplicado sem ícone. A busca por action 'user.list' é estável e
-        // independente do idioma configurado.
-        $usersMenuItem = null;
+        $migrationItem = (new CMenuItem(_('User Migration')))
+            ->setAction('usermigrate.view');
 
-        foreach ($mainMenu->getItems() as $item) {
-            if ($item->getAction() === 'user.list') {
-                $usersMenuItem = $item;
-                break;
-            }
-            // "Usuários" é um item pai (sem action própria), busca dentro dos submenus
-            $submenu = $item->getSubmenu();
-            if ($submenu !== null) {
-                foreach ($submenu->getItems() as $subItem) {
-                    if ($subItem->getAction() === 'user.list') {
-                        $usersMenuItem = $item; // retorna o pai (o item "Usuários")
-                        break 2;
-                    }
+        $reportItem = (new CMenuItem(_('User Objects Report')))
+            ->setAction('usermigrate.report');
+
+        if ($userType === USER_TYPE_SUPER_ADMIN) {
+            // Super Admin: menu "Usuários" fica dentro de "Administration"
+            // Busca pelo label (funciona em PT-BR e EN porque o Zabbix registra com _())
+            foreach ($menu->getMenuItems() as $item) {
+                if ($item->getLabel() === _('Administration') || $item->getLabel() === 'Administration') {
+                    $item->getSubMenu()
+                        ->add($migrationItem)
+                        ->add($reportItem);
+                    return;
                 }
             }
-        }
-
-        if ($usersMenuItem !== null) {
-            // Menu nativo encontrado — preserva ícone e estrutura existentes
-            $usersMenuItem->getSubmenu()
-                ->add(
-                    (new CMenuItem(_('User Migration')))
-                        ->setAction('usermigrate.view')
-                )
-                ->add(
-                    (new CMenuItem(_('User Objects Report')))
-                        ->setAction('usermigrate.report')
-                );
+            // Fallback: Administration não encontrado, adiciona direto no root
+            $menu->findOrAdd(_('Administration'))
+                ->getSubMenu()
+                ->add($migrationItem)
+                ->add($reportItem);
         }
         else {
-            // Fallback: cria entrada própria (não deve ocorrer em instalação padrão)
-            $mainMenu
-                ->findOrAdd(_('Users'))
-                ->getSubmenu()
-                ->add(
-                    (new CMenuItem(_('User Migration')))
-                        ->setAction('usermigrate.view')
-                )
-                ->add(
-                    (new CMenuItem(_('User Objects Report')))
-                        ->setAction('usermigrate.report')
-                );
+            // Admin (type=2): menu "Usuários" existe nativamente sem Administration
+            // findOrAdd encontra o item existente com ícone correto
+            $menu->findOrAdd(_('Users'))
+                ->getSubMenu()
+                ->add($migrationItem)
+                ->add($reportItem);
         }
     }
 }
