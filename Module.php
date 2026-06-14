@@ -29,27 +29,29 @@ class Module extends CModule {
         $reportItem = (new CMenuItem(_('User Objects Report')))
             ->setAction('usermigrate.report');
 
-        if ($userType === USER_TYPE_SUPER_ADMIN) {
-            // Super Admin: menu "Usuários" fica dentro de "Administration"
-            // Busca pelo label (funciona em PT-BR e EN porque o Zabbix registra com _())
-            foreach ($menu->getMenuItems() as $item) {
-                if ($item->getLabel() === _('Administration') || $item->getLabel() === 'Administration') {
-                    $item->getSubMenu()
-                        ->add($migrationItem)
-                        ->add($reportItem);
-                    return;
-                }
+        // O Zabbix registra o menu "Usuários" com setId('users-menu') e setIcon(ZBX_ICON_USERS)
+        // dentro de CMenuHelper. Buscar por esse id é o único jeito confiável de encontrar
+        // o item nativo (com ícone) para ambos os perfis Admin e Super Admin.
+        $usersMenuItem = null;
+
+        foreach ($menu->getMenuItems() as $item) {
+            if ($item->getId() === 'users-menu') {
+                $usersMenuItem = $item;
+                break;
             }
-            // Fallback: Administration não encontrado, adiciona direto no root
-            $menu->findOrAdd(_('Administration'))
-                ->getSubMenu()
+        }
+
+        if ($usersMenuItem !== null) {
+            // Encontrou o item nativo — preserva ícone ZBX_ICON_USERS já definido
+            $usersMenuItem->getSubMenu()
                 ->add($migrationItem)
                 ->add($reportItem);
         }
         else {
-            // Admin (type=2): menu "Usuários" existe nativamente sem Administration
-            // findOrAdd encontra o item existente com ícone correto
+            // Fallback: cria o item com ícone explícito
+            // (não deve ocorrer em instalação Zabbix 7.0 padrão)
             $menu->findOrAdd(_('Users'))
+                ->setIcon(ZBX_ICON_USERS)
                 ->getSubMenu()
                 ->add($migrationItem)
                 ->add($reportItem);
