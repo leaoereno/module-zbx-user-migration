@@ -11,6 +11,8 @@ use CWebUser;
 class Module extends CModule {
 
     public function init(): void {
+        // Guard umbrella Usuarios
+        if (defined('ZBX_USUARIOS_ACTIVE') && ZBX_USUARIOS_ACTIVE === true) { return; }
         CView::registerDirectory(__DIR__ . '/views');
 
         // Exibe o menu apenas para Admin (type=2) e Super Admin (type=3).
