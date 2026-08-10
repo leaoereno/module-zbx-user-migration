@@ -103,8 +103,11 @@ class Ui {
 /* Correcao do texto cortado: a altura do <select> era herdada do tema do Zabbix
    e ficava menor que o box do texto, cortando as descidas (g, ç, y). box-sizing
    + min-height + line-height explicitos resolvem em todos os temas. */
+/* input.zbx-migrate-search (0,1,1) e nao apenas a classe: o Zabbix estiliza
+   input[type="text"], que tem a mesma especificidade e venceria uma classe
+   simples. O <select> nao sofre disso porque a regra nativa e so `select`. */
 .zbx-migrate-select,
-.zbx-migrate-search {
+input.zbx-migrate-search {
     box-sizing: border-box;
     display: block;
     width: 100%;
@@ -124,14 +127,19 @@ class Ui {
 
 .zbx-migrate-select { padding-right: 26px; }
 .zbx-migrate-select:focus,
-.zbx-migrate-search:focus { outline: 2px solid var(--zm-link); outline-offset: -1px; }
+input.zbx-migrate-search:focus { outline: 2px solid var(--zm-link); outline-offset: -1px; }
 .zbx-migrate-select option { padding: 3px 6px; line-height: 1.5; }
 
 .zbx-migrate-search-wrap { position: relative; }
-.zbx-migrate-search { padding-left: 28px; }
+
+/* Abre espaco para a lupa sobreposta. !important porque o tema do Zabbix pode
+   declarar o padding do input com especificidade igual ou maior, e o texto
+   voltaria a nascer por baixo do icone. */
+.zbx-migrate-search-wrap input.zbx-migrate-search { padding-left: 30px !important; }
+
 .zbx-migrate-search-icon {
-    position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
-    font-size: 12px; color: var(--zm-muted); pointer-events: none;
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    font-size: 12px; line-height: 1; color: var(--zm-muted); pointer-events: none;
 }
 .zbx-migrate-count-hint { font-size: 11px; color: var(--zm-muted); min-height: 14px; }
 
