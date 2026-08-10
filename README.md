@@ -172,12 +172,19 @@ Estrutura esperada apos instalacao:
 |-- actions/
 |   |-- CControllerUserMigrateExecute.php
 |   |-- CControllerUserMigratePreview.php
+|   |-- CControllerUserMigrateReport.php
 |   `-- CControllerUserMigrateView.php
-|-- assets/js/
-|   `-- usermigrate.js
+|-- include/
+|   |-- AuthResolver.php
+|   `-- Ui.php
+|-- locale/
+|   |-- I18n.php
+|   |-- en_US/strings.php
+|   `-- pt_BR/strings.php
 |-- install.sh
 |-- manifest.json
 `-- views/
+    |-- usermigrate.report.php
     `-- usermigrate.view.php
 ```
 
@@ -209,7 +216,8 @@ tail -f /var/log/httpd/error_log | grep -i "usermigrate\|fatal"
 
 Apos habilitar:
 - Navegue a **Users > User Migration**
-- Selecione origem e destino — badges de autenticacao aparecem (LOCAL/LDAP/SAML/SYSTEM)
+- Selecione origem e destino — as etiquetas mostram o metodo real de cada lado
+  (LOCAL / LDAP / SAML), o nome do provedor e se o usuario e provisionado via JIT
 - Clique em **"Verificar o que sera migrado"** — lista preview sem alterar nada
 
 ---
@@ -331,26 +339,45 @@ module-zbx-user-migration/
 |-- manifest.json               Declara o modulo e as 3 actions
 |-- Module.php                  Registra views e menu Users > User Migration
 |-- install.sh                  Copia arquivos e ajusta permissoes
+|-- include/
+|   |-- AuthResolver.php
+|   |   Resolve o metodo de autenticacao real de cada usuario, nesta ordem:
+|   |     1. users.userdirectoryid -> userdirectory.idp_type (1=LDAP, 2=SAML)
+|   |        + nome do provedor + provision_status (provisionamento JIT)
+|   |     2. MAX(usrgrp.gui_access) entre os grupos do usuario (2=LDAP, 1=LOCAL)
+|   |     3. gui_access = 0 -> herda config.authentication_type
+|   |   gui_access = 3 (Disabled) e tratado como flag separada, nao como metodo
+|   |   Detecta as capacidades do schema em runtime (compativel com < 6.4)
+|   `-- Ui.php
+|       CSS unico compartilhado pelas duas views (sem copias divergentes)
+|       Deteccao de tema por luminancia do body -> classe .is-dark
+|-- locale/
+|   |-- I18n.php                 Carrega strings conforme o idioma da sessao
+|   |-- en_US/strings.php
+|   `-- pt_BR/strings.php
 |-- actions/
 |   |-- CControllerUserMigrateView.php
-|   |   Carrega usuarios com gui_access resolvido via JOIN em usrgrp
+|   |   Carrega usuarios ja resolvidos por AuthResolver
+|   |-- CControllerUserMigrateReport.php
+|   |   Relatorio de objetos vinculados a um usuario (somente leitura)
 |   |-- CControllerUserMigratePreview.php
 |   |   Consulta entidades vinculadas ao usuario de origem (somente leitura)
-|   |   Emite avisos para usuarios Super Admin e Admin nativo
+|   |   Avisos: Admin nativo, Super Admin, provisionamento JIT na origem e no
+|   |   destino, destino sem acesso ao frontend, mesmo metodo de autenticacao
 |   `-- CControllerUserMigrateExecute.php
-|       Executa migracao em DBbegin/DBcommit/DBrollback
-|       Gera id de users_groups via MAX(id)+1 (sem auto_increment)
+|       Executa migracao em DBstart/DBend (rollback automatico em excecao)
+|       Gera id de users_groups via DB::reserveIds (sem auto_increment)
 |       DELETE de duplicatas usando INNER JOIN (sem subselect na mesma tabela)
 |       Usa SELECT COUNT antes do UPDATE (sem ROW_COUNT)
 |       Usa DATABASE() no lugar de string hardcoded no INFORMATION_SCHEMA
 |       Registra operacao no auditlog nativo do Zabbix
 |       Bloqueia migracao do Admin nativo (ID 1)
-`-- assets/js/
-    `-- usermigrate.js
-        Badge dinamico por tipo de IdP (LOCAL/LDAP/SAML/SYSTEM/DISABLED)
-        CSRF token enviado no POST do execute
-        Confirmacao por digitacao do username de origem
-        Exibe avisos de Super Admin no preview
+`-- views/
+    |-- usermigrate.view.php
+    |   Selects com filtro de busca, etiquetas de autenticacao ricas
+    |   Modal de confirmacao por digitacao (substitui o prompt() nativo)
+    |   Todo o JS inline — o F5 BIG-IP bloqueia arquivos .js estaticos
+    `-- usermigrate.report.php
 ```
 
 ---

@@ -21,8 +21,6 @@ return [
     '...and more'                       => '...e mais',
     'items'                             => 'itens',
     'objects to migrate'                => 'objeto(s) a migrar',
-    'destination'                       => 'destino',
-    'origin'                            => 'origem',
 
     // Prompt de confirmacao
     'confirm_prompt'                    => "Para confirmar a migração, digite o username do usuário de ORIGEM:\n\nOrigem:  %s\nDestino: %s\n\nEsta operação é irreversível.",
@@ -99,11 +97,51 @@ return [
     'mig_action_recips'                 => '%d destinatário(s) de action',
     'mig_tokens'                        => '%d token(s) de API',
     'mig_groups'                        => '%d grupo(s) de usuário',
-    'mig_prefs'                         => 'preferências de interface',
+    'mig_prefs'                         => '%d preferência(s) de interface',
     'mig_phones'                        => '%d telefone(s) de plantão',
     'mig_schedules'                     => '%d escala(s) de plantão',
 
     // Avisos
     'warn_super_admin'                  => 'ATENÇÃO: O usuário de origem possui role de Super Admin (%s). Revise antes de confirmar.',
     'warn_admin_native'                 => 'ATENÇÃO: O usuário de origem é o Admin nativo (ID 1). A migração será bloqueada na execução.',
+
+    // Etiquetas de autenticacao
+    'auth_provider'                     => 'Provedor',
+    'auth_jit_provisioned'              => 'Provisionado automaticamente (JIT)',
+    'auth_no_frontend'                  => 'SEM ACESSO AO FRONTEND',
+    'auth_no_frontend_short'            => 'SEM ACESSO',
+    'auth_default_suffix'               => ' (padrão do sistema)',
+    'auth_from_system_default'          => 'Herdado do padrão de autenticação do sistema',
+    'auth_from_user_config'             => 'Definido no usuário ou no grupo',
+
+    // Busca e estado do formulário
+    'search_placeholder'                => 'Filtrar por usuário, nome ou tipo...',
+    'showing_users'                     => 'Exibindo %1$s de %2$s usuários',
+    'no_users_match'                    => 'Nenhum usuário corresponde ao filtro',
+    'hint_select_both'                  => 'Selecione o usuário de origem e o de destino.',
+    'hint_same_user'                    => 'Origem e destino não podem ser o mesmo usuário.',
+    'hint_ready'                        => 'Pronto para verificar.',
+
+    // Modal de confirmacao
+    'confirm_title'                     => 'Confirmar migração',
+    'confirm_intro'                     => 'Revise os dados antes de confirmar. Os objetos abaixo serão transferidos permanentemente.',
+    'confirm_label_source'              => 'Origem',
+    'confirm_label_dest'                => 'Destino',
+    'confirm_label_objects'             => 'Objetos',
+    'confirm_irreversible'              => 'Esta operação é irreversível. Não há desfazer.',
+    'confirm_type_username'             => 'Para confirmar, digite o username de origem:',
+
+    // Entidades adicionais
+    'Plantao Phones'                    => 'Plantão — Telefones',
+    'plantao_phones_desc'               => 'Telefones cadastrados no módulo de plantão',
+    'Plantao Schedules'                 => 'Plantão — Escalas',
+    'plantao_schedule_desc'             => 'Escalas de plantão atribuídas ao usuário',
+    'operation_id_label'                => 'Operação ID: %s',
+    'schedule_id_label'                 => 'Escala ID: %s',
+
+    // Avisos adicionais
+    'warn_dst_jit'                      => 'ATENÇÃO: o usuário de destino é provisionado automaticamente (JIT) por %s. Grupos e mídias serão reescritos pelo provedor no próximo login — ajuste o mapeamento no provedor para tornar a migração permanente.',
+    'warn_src_jit'                      => 'O usuário de origem é provisionado automaticamente (JIT) por %s. Ele será recriado no próximo login enquanto existir no provedor.',
+    'warn_same_auth'                    => 'Origem e destino usam o mesmo método de autenticação (%s). Confirme se este é realmente o par desejado.',
+    'warn_dst_no_frontend'              => 'ATENÇÃO: o usuário de destino pertence a um grupo com acesso ao frontend desabilitado. Ele receberá os objetos mas não conseguirá acessá-los.',
 ];

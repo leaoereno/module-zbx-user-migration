@@ -21,8 +21,6 @@ return [
     '...and more'                       => '...and more',
     'items'                             => 'items',
     'objects to migrate'                => 'object(s) to migrate',
-    'destination'                       => 'destination',
-    'origin'                            => 'origin',
 
     // Confirmation prompt
     'confirm_prompt'                    => "To confirm the migration, type the username of the SOURCE user:\n\nSource:      %s\nDestination: %s\n\nThis operation is irreversible.",
@@ -99,11 +97,51 @@ return [
     'mig_action_recips'                 => '%d action recipient(s)',
     'mig_tokens'                        => '%d API token(s)',
     'mig_groups'                        => '%d user group(s)',
-    'mig_prefs'                         => 'interface preferences',
+    'mig_prefs'                         => '%d interface preference(s)',
     'mig_phones'                        => '%d on-call phone(s)',
     'mig_schedules'                     => '%d on-call schedule(s)',
 
     // Warnings
     'warn_super_admin'                  => 'WARNING: The source user has a Super Admin role (%s). Review before confirming.',
     'warn_admin_native'                 => 'WARNING: The source user is the native Admin (ID 1). Migration will be blocked on execution.',
+
+    // Authentication badges
+    'auth_provider'                     => 'Provider',
+    'auth_jit_provisioned'              => 'Automatically provisioned (JIT)',
+    'auth_no_frontend'                  => 'NO FRONTEND ACCESS',
+    'auth_no_frontend_short'            => 'NO ACCESS',
+    'auth_default_suffix'               => ' (system default)',
+    'auth_from_system_default'          => 'Inherited from the system authentication default',
+    'auth_from_user_config'             => 'Set on the user or user group',
+
+    // Search and form state
+    'search_placeholder'                => 'Filter by username, name or type...',
+    'showing_users'                     => 'Showing %1$s of %2$s users',
+    'no_users_match'                    => 'No user matches the filter',
+    'hint_select_both'                  => 'Select both a source and a destination user.',
+    'hint_same_user'                    => 'Source and destination cannot be the same user.',
+    'hint_ready'                        => 'Ready to check.',
+
+    // Confirmation modal
+    'confirm_title'                     => 'Confirm migration',
+    'confirm_intro'                     => 'Review the details before confirming. The objects below will be transferred permanently.',
+    'confirm_label_source'              => 'Source',
+    'confirm_label_dest'                => 'Destination',
+    'confirm_label_objects'             => 'Objects',
+    'confirm_irreversible'              => 'This operation is irreversible. There is no undo.',
+    'confirm_type_username'             => 'To confirm, type the source username:',
+
+    // Additional entities
+    'Plantao Phones'                    => 'On-call - Phones',
+    'plantao_phones_desc'               => 'Phone numbers registered in the on-call module',
+    'Plantao Schedules'                 => 'On-call - Schedules',
+    'plantao_schedule_desc'             => 'On-call schedules assigned to the user',
+    'operation_id_label'                => 'Operation ID: %s',
+    'schedule_id_label'                 => 'Schedule ID: %s',
+
+    // Additional warnings
+    'warn_dst_jit'                      => 'WARNING: the destination user is automatically provisioned (JIT) by %s. Groups and media will be overwritten by the provider on the next login - update the provider mapping to make the migration permanent.',
+    'warn_src_jit'                      => 'The source user is automatically provisioned (JIT) by %s. It will be recreated on the next login while it still exists in the provider.',
+    'warn_same_auth'                    => 'Source and destination use the same authentication method (%s). Confirm this is really the intended pair.',
+    'warn_dst_no_frontend'              => 'WARNING: the destination user belongs to a group with frontend access disabled. It will receive the objects but will not be able to access them.',
 ];

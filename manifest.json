@@ -1,11 +1,11 @@
 {
-    "manifest_version": 2.0,
+    "manifest_version": 2,
     "id": "zbx-user-migrate",
     "name": "User Migration",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "author": "Rafael M. A. Leão Ereno - MALE",
     "url": "https://www.linkedin.com/in/leaoereno/",
-    "description": "Migrates all owned objects (dashboards, maps, reports, media, actions) from a local user to an LDAP-provisioned user.",
+    "description": "Transfers all owned objects (dashboards, maps, reports, media, actions, groups) between Zabbix users, detecting the real authentication method (Local, LDAP or SAML) of both source and destination.",
     "namespace": "UserMigrate",
     "actions": {
         "usermigrate.view": {

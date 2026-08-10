@@ -1,24 +1,45 @@
 <?php
 /**
  * View: usermigrate.view
- * Interface de migração de usuários — multilíngue via I18n.
+ * Interface de migracao de usuarios — multilingue via I18n.
+ *
+ * CSS e etiquetas de autenticacao vem de include/Ui.php e include/AuthResolver.php.
  */
 
 require_once __DIR__ . '/../locale/I18n.php';
+require_once __DIR__ . '/../include/AuthResolver.php';
+require_once __DIR__ . '/../include/Ui.php';
+
 use Modules\UserMigrate\I18n;
+use Modules\UserMigrate\AuthResolver;
+use Modules\UserMigrate\Ui;
 
-$t          = I18n::get();
-$module_dir = basename(dirname(__DIR__));
-$lang       = I18n::getLang();
+$t    = I18n::get();
+$lang = I18n::getLang();
 
-function getAuthBadgeMigrate(int $gui_access): array {
-    switch ($gui_access) {
-        case 1:  return ['label' => 'LOCAL',    'class' => 'zbx-badge-local'];
-        case 2:  return ['label' => 'LDAP',     'class' => 'zbx-badge-ldap'];
-        case 3:  return ['label' => 'DISABLED', 'class' => 'zbx-badge-disabled'];
-        default: return ['label' => 'SYSTEM',   'class' => 'zbx-badge-system'];
+/**
+ * Monta as <option> de um select de usuario.
+ * O marcador de autenticacao vai no texto porque <option> nao aceita HTML —
+ * a etiqueta rica aparece abaixo do select, ja no formato de badge.
+ */
+$render_options = static function (array $users) use ($t): string {
+    $html = '<option value="">' . htmlspecialchars($t('-- Select --'), ENT_QUOTES) . '</option>';
+
+    foreach ($users as $u) {
+        $label = Ui::displayName($u) . ' ' . AuthResolver::optionMarker($u['auth']);
+
+        $html .= '<option value="' . htmlspecialchars((string) $u['userid'], ENT_QUOTES) . '"'
+               . ' data-auth="' . htmlspecialchars(json_encode(AuthResolver::jsPayload($u['auth'])), ENT_QUOTES) . '"'
+               . ' title="' . htmlspecialchars($label, ENT_QUOTES) . '">'
+               . htmlspecialchars($label)
+               . '</option>';
     }
-}
+
+    return $html;
+};
+
+$options_html = $render_options($data['users']);
+$user_count   = count($data['users']);
 ?>
 <div class="zbx-migrate-wrap">
 
@@ -30,45 +51,29 @@ function getAuthBadgeMigrate(int $gui_access): array {
 
             <div class="zbx-migrate-field">
                 <label for="userid_src"><?= $t('Source User') ?></label>
-                <select id="userid_src" name="userid_src" class="zbx-migrate-select">
-                    <option value=""><?= $t('-- Select --') ?></option>
-                    <?php foreach ($data['users'] as $u):
-                        $badge = getAuthBadgeMigrate((int)$u['gui_access']);
-                    ?>
-                        <option value="<?= htmlspecialchars($u['userid']) ?>"
-                                data-badge="<?= $badge['label'] ?>"
-                                data-badge-class="<?= $badge['class'] ?>">
-                            <?= htmlspecialchars($u['username']) ?>
-                            <?= ($u['name'] || $u['surname'])
-                                ? '(' . htmlspecialchars(trim($u['name'] . ' ' . $u['surname'])) . ')'
-                                : '' ?>
-                            [<?= $badge['label'] ?>]
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <div class="zbx-migrate-search-wrap">
+                    <span class="zbx-migrate-search-icon" aria-hidden="true">&#128269;</span>
+                    <input type="text" class="zbx-migrate-search" id="search_src"
+                           placeholder="<?= htmlspecialchars($t('search_placeholder'), ENT_QUOTES) ?>"
+                           aria-controls="userid_src" autocomplete="off">
+                </div>
+                <select id="userid_src" name="userid_src" class="zbx-migrate-select" size="1"><?= $options_html ?></select>
+                <div class="zbx-migrate-count-hint" id="hint_src" aria-live="polite"></div>
                 <small><?= $t('source_hint') ?></small>
             </div>
 
-            <div class="zbx-migrate-arrow">→</div>
+            <div class="zbx-migrate-arrow" aria-hidden="true">&rarr;</div>
 
             <div class="zbx-migrate-field">
                 <label for="userid_dst"><?= $t('Destination User') ?></label>
-                <select id="userid_dst" name="userid_dst" class="zbx-migrate-select">
-                    <option value=""><?= $t('-- Select --') ?></option>
-                    <?php foreach ($data['users'] as $u):
-                        $badge = getAuthBadgeMigrate((int)$u['gui_access']);
-                    ?>
-                        <option value="<?= htmlspecialchars($u['userid']) ?>"
-                                data-badge="<?= $badge['label'] ?>"
-                                data-badge-class="<?= $badge['class'] ?>">
-                            <?= htmlspecialchars($u['username']) ?>
-                            <?= ($u['name'] || $u['surname'])
-                                ? '(' . htmlspecialchars(trim($u['name'] . ' ' . $u['surname'])) . ')'
-                                : '' ?>
-                            [<?= $badge['label'] ?>]
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <div class="zbx-migrate-search-wrap">
+                    <span class="zbx-migrate-search-icon" aria-hidden="true">&#128269;</span>
+                    <input type="text" class="zbx-migrate-search" id="search_dst"
+                           placeholder="<?= htmlspecialchars($t('search_placeholder'), ENT_QUOTES) ?>"
+                           aria-controls="userid_dst" autocomplete="off">
+                </div>
+                <select id="userid_dst" name="userid_dst" class="zbx-migrate-select" size="1"><?= $options_html ?></select>
+                <div class="zbx-migrate-count-hint" id="hint_dst" aria-live="polite"></div>
                 <small><?= $t('destination_hint') ?></small>
             </div>
 
@@ -76,18 +81,21 @@ function getAuthBadgeMigrate(int $gui_access): array {
 
         <div class="zbx-migrate-badge-row">
             <div id="src-badge-wrap" class="zbx-migrate-badge-wrap" style="display:none;">
-                <?= $t('Authentication type:') ?> <span id="src-badge" class="zbx-migrate-badge"></span>
+                <span class="zbx-migrate-badge-label"><?= $t('Authentication type:') ?></span>
+                <span id="src-badge"></span>
             </div>
-            <div class="zbx-migrate-arrow-small">→</div>
+            <div class="zbx-migrate-arrow-small" aria-hidden="true">&rarr;</div>
             <div id="dst-badge-wrap" class="zbx-migrate-badge-wrap" style="display:none;">
-                <?= $t('Authentication type:') ?> <span id="dst-badge" class="zbx-migrate-badge"></span>
+                <span class="zbx-migrate-badge-label"><?= $t('Authentication type:') ?></span>
+                <span id="dst-badge"></span>
             </div>
         </div>
 
         <div class="zbx-migrate-actions">
-            <button id="btn-preview" class="btn-alt" disabled>
+            <button type="button" id="btn-preview" class="btn-alt" disabled>
                 <?= $t('Check what will be migrated') ?>
             </button>
+            <span class="zbx-migrate-hint" id="action-hint" aria-live="polite"><?= $t('hint_select_both') ?></span>
         </div>
     </div>
 
@@ -96,94 +104,95 @@ function getAuthBadgeMigrate(int $gui_access): array {
         <div id="zbx-migrate-preview-body"></div>
         <div class="zbx-migrate-confirm-bar">
             <span id="zbx-migrate-total"></span>
-            <button id="btn-execute" class="btn-danger"><?= $t('Confirm Migration') ?></button>
-            <button id="btn-cancel" class="btn-alt"><?= $t('Cancel') ?></button>
+            <button type="button" id="btn-execute" class="btn-danger"><?= $t('Confirm Migration') ?></button>
+            <button type="button" id="btn-cancel" class="btn-alt"><?= $t('Cancel') ?></button>
         </div>
     </div>
 
-    <div id="zbx-migrate-result" style="display:none;"></div>
+    <div id="zbx-migrate-result" style="display:none;" aria-live="polite"></div>
+
+    <!-- Modal de confirmacao (substitui o prompt() nativo, que e bloqueavel pelo
+         browser, nao estiliza e nao permite exibir o resumo da operacao) -->
+    <div class="zbx-migrate-modal-overlay" id="confirm-modal" role="dialog" aria-modal="true"
+         aria-labelledby="confirm-modal-title">
+        <div class="zbx-migrate-modal">
+            <div class="zbx-migrate-modal-header" id="confirm-modal-title">
+                <span aria-hidden="true">&#9888;</span><?= $t('confirm_title') ?>
+            </div>
+            <div class="zbx-migrate-modal-body">
+                <p style="margin:0"><?= $t('confirm_intro') ?></p>
+                <dl>
+                    <dt><?= $t('confirm_label_source') ?></dt><dd id="confirm-src"></dd>
+                    <dt><?= $t('confirm_label_dest') ?></dt><dd id="confirm-dst"></dd>
+                    <dt><?= $t('confirm_label_objects') ?></dt><dd id="confirm-total"></dd>
+                </dl>
+                <div class="zbx-migrate-modal-warn"><?= $t('confirm_irreversible') ?></div>
+                <label for="confirm-input"><?= $t('confirm_type_username') ?>
+                    <strong id="confirm-expected"></strong>
+                </label>
+                <input type="text" id="confirm-input" autocomplete="off" spellcheck="false">
+                <div class="zbx-migrate-modal-error" id="confirm-error"></div>
+            </div>
+            <div class="zbx-migrate-modal-footer">
+                <button type="button" class="btn-alt" id="confirm-cancel"><?= $t('Cancel') ?></button>
+                <button type="button" class="btn-danger" id="confirm-ok" disabled><?= $t('Confirm Migration') ?></button>
+            </div>
+        </div>
+    </div>
 
 </div>
 
-<style>
-.zbx-migrate-wrap { max-width: 900px; margin: 24px auto; padding: 0 16px; }
-.zbx-migrate-title { font-size: 20px; font-weight: 600; margin-bottom: 6px; color: var(--color-text-primary, #333); }
-.zbx-migrate-subtitle { color: var(--color-text-secondary, #666); margin-bottom: 24px; font-size: 13px; }
-.zbx-migrate-form { background: var(--color-bg-primary, #fff); border: 1px solid var(--color-border, #ddd); border-radius: 4px; padding: 24px; margin-bottom: 24px; }
-.zbx-migrate-selectors { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
-.zbx-migrate-field { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 6px; }
-.zbx-migrate-field label { font-weight: 600; font-size: 13px; }
-.zbx-migrate-field small { font-size: 11px; color: var(--color-text-secondary, #888); }
-.zbx-migrate-select { width: 100%; padding: 6px 8px; border: 1px solid var(--color-border, #ccc); border-radius: 3px; font-size: 13px; }
-.zbx-migrate-arrow { font-size: 28px; color: var(--color-text-secondary, #aaa); padding-bottom: 20px; user-select: none; }
-.zbx-migrate-arrow-small { font-size: 18px; color: var(--color-text-secondary, #aaa); user-select: none; }
-.zbx-migrate-badge-row { display: flex; align-items: center; gap: 16px; margin-top: 12px; min-height: 24px; flex-wrap: wrap; }
-.zbx-migrate-badge-wrap { flex: 1; font-size: 12px; color: var(--color-text-secondary, #666); display: flex; align-items: center; gap: 6px; }
-.zbx-migrate-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-.zbx-badge-local    { background: #fff3cd; color: #856404; }
-.zbx-badge-ldap     { background: #d1e7dd; color: #0a4f2e; }
-.zbx-badge-system   { background: #e2e3e5; color: #383d41; }
-.zbx-badge-disabled { background: #f8d7da; color: #58151c; }
-.zbx-migrate-actions { margin-top: 20px; }
-.zbx-migrate-preview { background: var(--color-bg-primary, #fff); border: 1px solid var(--color-border, #ddd); border-radius: 4px; overflow: hidden; }
-.zbx-migrate-preview-header { background: var(--color-bg-secondary, #f8f9fa); border-bottom: 1px solid var(--color-border, #ddd); padding: 14px 20px; font-size: 14px; }
-.zbx-migrate-section { border-bottom: 1px solid var(--color-border, #eee); padding: 16px 20px; }
-.zbx-migrate-section:last-child { border-bottom: none; }
-.zbx-migrate-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; cursor: pointer; user-select: none; }
-.zbx-migrate-section-title { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; }
-.zbx-migrate-count { background: #d35400; color: #fff; font-size: 11px; padding: 1px 7px; border-radius: 10px; font-weight: 600; }
-.zbx-migrate-section-desc { font-size: 12px; color: var(--color-text-secondary, #888); margin-bottom: 8px; }
-.zbx-migrate-items { display: none; margin-top: 8px; }
-.zbx-migrate-items.open { display: block; }
-.zbx-migrate-items ul { margin: 0; padding: 0 0 0 18px; list-style: disc; }
-.zbx-migrate-items li { font-size: 12px; color: var(--color-text-secondary, #555); padding: 2px 0; }
-.zbx-migrate-toggle { font-size: 11px; color: var(--color-link, #1a7dc4); cursor: pointer; }
-.zbx-migrate-confirm-bar { background: var(--color-bg-secondary, #f8f9fa); border-top: 1px solid var(--color-border, #ddd); padding: 14px 20px; display: flex; align-items: center; gap: 12px; }
-#zbx-migrate-total { flex: 1; font-size: 13px; font-weight: 600; }
-.zbx-migrate-result-ok { padding: 14px 18px; border-radius: 4px; background: #d1e7dd; border: 1px solid #a3cfbb; color: #0a4f2e; font-size: 13px; }
-.zbx-migrate-result-ok strong { display: block; margin-bottom: 4px; }
-.zbx-migrate-result-err { padding: 14px 18px; border-radius: 4px; background: #f8d7da; border: 1px solid #f1aeb5; color: #58151c; font-size: 13px; }
-.zbx-migrate-result-err strong { display: block; margin-bottom: 4px; }
-.zbx-migrate-empty { padding: 32px 20px; text-align: center; color: var(--color-text-secondary, #888); font-size: 13px; }
-.zbx-migrate-warnings { padding: 12px 20px; background: #fff3cd; border-bottom: 1px solid #ffc107; }
-.zbx-migrate-warning { font-size: 12px; color: #856404; padding: 3px 0; font-weight: 600; }
-</style>
+<?= Ui::styles() ?>
+<?= Ui::themeScript('.zbx-migrate-wrap') ?>
 
 <script>
 // Strings i18n passadas do PHP para o JS
 const ZBX_MIGRATE_I18N = <?= json_encode([
-    'checking'         => $t('Checking...'),
-    'check_btn'        => $t('Check what will be migrated'),
-    'confirm_btn'      => $t('Confirm Migration'),
-    'migrating'        => $t('Migrating...'),
-    'cancel'           => $t('Cancel'),
-    'no_objects'       => $t('No objects found linked to source user.'),
-    'and_more'         => $t('...and more'),
-    'items'            => $t('items'),
+    'checking'           => $t('Checking...'),
+    'check_btn'          => $t('Check what will be migrated'),
+    'confirm_btn'        => $t('Confirm Migration'),
+    'migrating'          => $t('Migrating...'),
+    'cancel'             => $t('Cancel'),
+    'no_objects'         => $t('No objects found linked to source user.'),
+    'and_more'           => $t('...and more'),
+    'items'              => $t('items'),
     'objects_to_migrate' => $t('objects to migrate'),
-    'expand'           => '▼ ' . ($lang === 'pt_BR' ? 'expandir' : 'expand'),
-    'collapse'         => '▲ ' . ($lang === 'pt_BR' ? 'ocultar'  : 'collapse'),
-    'confirm_prompt'   => $t('confirm_prompt'),
-    'wrong_confirm'    => $t('Wrong confirmation.'),
-    'confirm_mismatch' => $t('confirm_mismatch'),
-    'server_error'     => $t('Server communication error.'),
-    'origin'           => $t('origin'),
-    'destination'      => $t('destination'),
-]) ?>;
+    'expand'             => '▼ ' . ($lang === 'pt_BR' ? 'expandir' : 'expand'),
+    'collapse'           => '▲ ' . ($lang === 'pt_BR' ? 'ocultar'  : 'collapse'),
+    'wrong_confirm'      => $t('Wrong confirmation.'),
+    'confirm_mismatch'   => $t('confirm_mismatch'),
+    'server_error'       => $t('Server communication error.'),
+    'hint_select_both'   => $t('hint_select_both'),
+    'hint_same_user'     => $t('hint_same_user'),
+    'hint_ready'         => $t('hint_ready'),
+    'showing_users'      => $t('showing_users'),
+    'no_users_match'     => $t('no_users_match'),
+    'auth_provider'      => $t('auth_provider'),
+    'auth_jit'           => $t('auth_jit_provisioned'),
+    'auth_no_frontend'   => $t('auth_no_frontend'),
+    'auth_default_sfx'   => $t('auth_default_suffix'),
+], JSON_UNESCAPED_UNICODE) ?>;
 
 (function () {
     'use strict';
 
     const T = ZBX_MIGRATE_I18N;
+    const TOTAL_USERS = <?= (int) $user_count ?>;
 
     let _srcUsername = '';
     let _dstUsername = '';
+    let _total       = 0;
 
     const selSrc       = document.getElementById('userid_src');
     const selDst       = document.getElementById('userid_dst');
+    const searchSrc    = document.getElementById('search_src');
+    const searchDst    = document.getElementById('search_dst');
+    const hintSrc      = document.getElementById('hint_src');
+    const hintDst      = document.getElementById('hint_dst');
     const btnPreview   = document.getElementById('btn-preview');
     const btnExecute   = document.getElementById('btn-execute');
     const btnCancel    = document.getElementById('btn-cancel');
+    const actionHint   = document.getElementById('action-hint');
     const divPreview   = document.getElementById('zbx-migrate-preview');
     const divHeader    = document.getElementById('zbx-migrate-preview-header');
     const divBody      = document.getElementById('zbx-migrate-preview-body');
@@ -194,86 +203,245 @@ const ZBX_MIGRATE_I18N = <?= json_encode([
     const srcBadge     = document.getElementById('src-badge');
     const dstBadge     = document.getElementById('dst-badge');
 
+    const modal        = document.getElementById('confirm-modal');
+    const modalInput   = document.getElementById('confirm-input');
+    const modalOk      = document.getElementById('confirm-ok');
+    const modalCancel  = document.getElementById('confirm-cancel');
+    const modalError   = document.getElementById('confirm-error');
+
+    // ── Filtro de usuarios ──────────────────────────────────────────────────
+    // Em base real o <select> tem centenas de usuarios e rolar a lista nativa e
+    // inviavel. Filtrar removendo/reinserindo <option> (em vez de display:none,
+    // que o Safari ignora dentro de <select>).
+    function snapshot(select) {
+        return Array.from(select.options).map(function (o) {
+            return { value: o.value, text: o.text, auth: o.getAttribute('data-auth'), title: o.title };
+        });
+    }
+
+    const SRC_OPTIONS = snapshot(selSrc);
+    const DST_OPTIONS = snapshot(selDst);
+
+    function applyFilter(select, options, term, hint) {
+        const keep    = select.value;
+        const needle  = term.trim().toLowerCase();
+        const frag    = document.createDocumentFragment();
+        let   matches = 0;
+
+        options.forEach(function (o) {
+            if (o.value !== '' && needle !== '' && o.text.toLowerCase().indexOf(needle) === -1) {
+                return;
+            }
+
+            const opt = document.createElement('option');
+            opt.value = o.value;
+            opt.text  = o.text;
+            opt.title = o.title || '';
+            if (o.auth) { opt.setAttribute('data-auth', o.auth); }
+            frag.appendChild(opt);
+
+            if (o.value !== '') { matches++; }
+        });
+
+        select.innerHTML = '';
+        select.appendChild(frag);
+        select.value = keep;
+
+        // Se o usuario selecionado saiu do filtro, limpa a selecao.
+        if (select.value !== keep) { select.value = ''; }
+
+        if (needle === '') {
+            hint.textContent = T.showing_users.replace('%1$s', TOTAL_USERS).replace('%2$s', TOTAL_USERS);
+        }
+        else if (matches === 0) {
+            hint.textContent = T.no_users_match;
+        }
+        else {
+            hint.textContent = T.showing_users.replace('%1$s', matches).replace('%2$s', TOTAL_USERS);
+        }
+
+        syncState();
+    }
+
+    let filterTimer = null;
+
+    function debounceFilter(select, options, input, hint) {
+        clearTimeout(filterTimer);
+        filterTimer = setTimeout(function () {
+            applyFilter(select, options, input.value, hint);
+        }, 120);
+    }
+
+    searchSrc.addEventListener('input', function () { debounceFilter(selSrc, SRC_OPTIONS, searchSrc, hintSrc); });
+    searchDst.addEventListener('input', function () { debounceFilter(selDst, DST_OPTIONS, searchDst, hintDst); });
+
+    // Enter no campo de busca nao deve submeter nada.
+    [searchSrc, searchDst].forEach(function (el) {
+        el.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); } });
+    });
+
+    // ── Etiquetas de autenticacao ───────────────────────────────────────────
+    function renderBadge(auth) {
+        let html = '<span class="zbx-migrate-badge ' + escAttr(auth.class) + '" title="' + escAttr(auth.title) + '">' +
+                   escHtml(auth.label);
+
+        if (auth.inherited) {
+            html += '<em>' + escHtml(T.auth_default_sfx) + '</em>';
+        }
+
+        html += '</span>';
+
+        if (auth.provider) {
+            html += '<span class="zbx-migrate-chip" title="' + escAttr(T.auth_provider) + '">' +
+                    escHtml(auth.provider) + '</span>';
+        }
+
+        if (auth.provisioned) {
+            html += '<span class="zbx-migrate-chip zbx-chip-jit" title="' + escAttr(T.auth_jit) + '">JIT</span>';
+        }
+
+        if (auth.blocked) {
+            html += '<span class="zbx-migrate-chip zbx-chip-blocked">' + escHtml(T.auth_no_frontend) + '</span>';
+        }
+
+        return html;
+    }
+
     function updateBadge(select, badgeEl, badgeWrap) {
         const opt = select.options[select.selectedIndex];
-        if (!opt || !opt.value) { badgeWrap.style.display = 'none'; return; }
-        const label = opt.getAttribute('data-badge') || 'SYSTEM';
-        const cls   = opt.getAttribute('data-badge-class') || 'zbx-badge-system';
-        badgeEl.textContent = label;
-        badgeEl.className   = 'zbx-migrate-badge ' + cls;
+
+        if (!opt || !opt.value) {
+            badgeWrap.style.display = 'none';
+            return;
+        }
+
+        let auth;
+        try { auth = JSON.parse(opt.getAttribute('data-auth') || '{}'); }
+        catch (e) { auth = {}; }
+
+        badgeEl.innerHTML = renderBadge({
+            label:       auth.label       || 'N/D',
+            class:       auth.class       || 'zbx-badge-unknown',
+            provider:    auth.provider    || '',
+            provisioned: !!auth.provisioned,
+            inherited:   !!auth.inherited,
+            blocked:     !!auth.blocked,
+            title:       auth.title       || ''
+        });
+
         badgeWrap.style.display = '';
     }
 
-    function syncPreviewButton() {
+    // ── Estado do formulario ────────────────────────────────────────────────
+    function syncState() {
         updateBadge(selSrc, srcBadge, srcBadgeWrap);
         updateBadge(selDst, dstBadge, dstBadgeWrap);
-        const ready = selSrc.value && selDst.value && selSrc.value !== selDst.value;
-        btnPreview.disabled = !ready;
+
+        const bothSet = selSrc.value !== '' && selDst.value !== '';
+        const same    = bothSet && selSrc.value === selDst.value;
+
+        btnPreview.disabled = !bothSet || same;
+
+        if (!bothSet)   { actionHint.textContent = T.hint_select_both; }
+        else if (same)  { actionHint.textContent = T.hint_same_user; }
+        else            { actionHint.textContent = T.hint_ready; }
+
         divPreview.style.display = 'none';
         divResult.style.display  = 'none';
     }
 
-    selSrc.addEventListener('change', syncPreviewButton);
-    selDst.addEventListener('change', syncPreviewButton);
+    selSrc.addEventListener('change', syncState);
+    selDst.addEventListener('change', syncState);
 
+    // ── Comunicacao com o backend ───────────────────────────────────────────
+    // No Zabbix 7.0 o parametro "action" precisa ir na query string: enviado no
+    // body ele conflita com o roteador do frontend.
     function post(action, params) {
-        const body = new URLSearchParams({ action, ...params });
-        return fetch('zabbix.php', {
+        return fetch('zabbix.php?action=' + encodeURIComponent(action), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: body.toString()
-        }).then(r => r.json());
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams(params).toString()
+        }).then(function (r) {
+            if (!r.ok) { throw new Error('HTTP ' + r.status); }
+            return r.json();
+        });
     }
 
     btnPreview.addEventListener('click', function () {
-        btnPreview.disabled = true;
+        btnPreview.disabled    = true;
         btnPreview.textContent = T.checking;
         divResult.style.display = 'none';
 
         post('usermigrate.preview', { userid_src: selSrc.value, userid_dst: selDst.value })
-        .then(function (data) {
-            btnPreview.disabled = false;
-            btnPreview.textContent = T.check_btn;
-            if (data.error) { showResult('error', data.error.title, data.error.messages || []); return; }
-            renderPreview(data);
-        })
-        .catch(function (err) {
-            btnPreview.disabled = false;
-            btnPreview.textContent = T.check_btn;
-            showResult('error', T.server_error, [err.message]);
-        });
+            .then(function (data) {
+                btnPreview.disabled    = false;
+                btnPreview.textContent = T.check_btn;
+
+                if (data.error) {
+                    showResult('error', data.error.title, data.error.messages || []);
+                    return;
+                }
+
+                renderPreview(data);
+            })
+            .catch(function (err) {
+                btnPreview.disabled    = false;
+                btnPreview.textContent = T.check_btn;
+                showResult('error', T.server_error, [err.message]);
+            });
     });
 
     function renderPreview(data) {
         _srcUsername = data.user_src.username;
         _dstUsername = data.user_dst.username;
+        _total       = data.total || 0;
 
-        const srcName = formatUser(data.user_src);
-        const dstName = formatUser(data.user_dst);
-        divHeader.innerHTML = '<strong>' + escHtml(srcName) + '</strong> &nbsp;→&nbsp; <strong>' + escHtml(dstName) + '</strong>';
+        divHeader.innerHTML = '<strong>' + escHtml(formatUser(data.user_src)) + '</strong>' +
+                              ' &nbsp;&rarr;&nbsp; ' +
+                              '<strong>' + escHtml(formatUser(data.user_dst)) + '</strong>';
 
         let warningsHtml = '';
+
         if (data.warnings && data.warnings.length) {
             warningsHtml = '<div class="zbx-migrate-warnings">' +
-                data.warnings.map(w => '<div class="zbx-migrate-warning">⚠ ' + escHtml(w) + '</div>').join('') +
+                data.warnings.map(function (w) {
+                    const text     = (typeof w === 'string') ? w : w.text;
+                    const critical = (typeof w === 'object' && w.level === 'critical');
+                    return '<div class="zbx-migrate-warning' + (critical ? ' zbx-migrate-warning-critical' : '') + '">' +
+                           '<span aria-hidden="true">&#9888;</span><span>' + escHtml(text) + '</span></div>';
+                }).join('') +
                 '</div>';
         }
 
         if (!data.preview || data.preview.length === 0) {
-            divBody.innerHTML = warningsHtml + '<div class="zbx-migrate-empty">' + escHtml(T.no_objects) + '</div>';
+            divBody.innerHTML   = warningsHtml + '<div class="zbx-migrate-empty">' + escHtml(T.no_objects) + '</div>';
             divTotal.textContent = '0 ' + T.objects_to_migrate;
             btnExecute.style.display = 'none';
-        } else {
-            divBody.innerHTML = warningsHtml + data.preview.map(renderSection).join('');
+        }
+        else {
+            divBody.innerHTML    = warningsHtml + data.preview.map(renderSection).join('');
             divTotal.textContent = data.total + ' ' + T.objects_to_migrate;
             btnExecute.style.display = '';
 
             divBody.querySelectorAll('.zbx-migrate-section-header').forEach(function (hdr) {
-                hdr.addEventListener('click', function () {
-                    const items  = hdr.closest('.zbx-migrate-section').querySelector('.zbx-migrate-items');
-                    if (items) items.classList.toggle('open');
+                hdr.setAttribute('tabindex', '0');
+                hdr.setAttribute('role', 'button');
+
+                const toggleSection = function () {
+                    const items = hdr.closest('.zbx-migrate-section').querySelector('.zbx-migrate-items');
+                    if (!items) { return; }
+                    items.classList.toggle('open');
                     const toggle = hdr.querySelector('.zbx-migrate-toggle');
-                    if (toggle) toggle.textContent = items.classList.contains('open') ? T.collapse : T.expand;
+                    if (toggle) { toggle.textContent = items.classList.contains('open') ? T.collapse : T.expand; }
+                    hdr.setAttribute('aria-expanded', items.classList.contains('open') ? 'true' : 'false');
+                };
+
+                hdr.addEventListener('click', toggleSection);
+                hdr.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSection(); }
                 });
             });
         }
@@ -283,22 +451,25 @@ const ZBX_MIGRATE_I18N = <?= json_encode([
     }
 
     function formatUser(u) {
-        return u.username + ((u.name || u.surname) ? ' (' + (u.name + ' ' + u.surname).trim() + ')' : '');
+        const full = ((u.name || '') + ' ' + (u.surname || '')).trim();
+        return full ? u.username + ' (' + full + ')' : u.username;
     }
 
     function renderSection(section) {
         const itemsHtml = section.items && section.items.length
             ? '<div class="zbx-migrate-items"><ul>' +
-              section.items.slice(0, 50).map(i => '<li>' + escHtml(String(i)) + '</li>').join('') +
-              (section.items.length > 50 ? '<li><em>' + T.and_more + ' ' + (section.items.length - 50) + ' ' + T.items + '</em></li>' : '') +
+              section.items.slice(0, 50).map(function (i) { return '<li>' + escHtml(String(i)) + '</li>'; }).join('') +
+              (section.items.length > 50
+                  ? '<li><em>' + escHtml(T.and_more) + ' ' + (section.items.length - 50) + ' ' + escHtml(T.items) + '</em></li>'
+                  : '') +
               '</ul></div>'
             : '';
 
         return '<div class="zbx-migrate-section">' +
-            '<div class="zbx-migrate-section-header">' +
+            '<div class="zbx-migrate-section-header" aria-expanded="false">' +
                 '<span class="zbx-migrate-section-title">' + escHtml(section.entity) +
-                    '<span class="zbx-migrate-count">' + section.count + '</span></span>' +
-                (itemsHtml ? '<span class="zbx-migrate-toggle">' + T.expand + '</span>' : '') +
+                    '<span class="zbx-migrate-count">' + escHtml(String(section.count)) + '</span></span>' +
+                (itemsHtml ? '<span class="zbx-migrate-toggle">' + escHtml(T.expand) + '</span>' : '') +
             '</div>' +
             '<div class="zbx-migrate-section-desc">' + escHtml(section.description) + '</div>' +
             itemsHtml +
@@ -307,92 +478,136 @@ const ZBX_MIGRATE_I18N = <?= json_encode([
 
     btnCancel.addEventListener('click', function () { divPreview.style.display = 'none'; });
 
-    btnExecute.addEventListener('click', function () {
-        const srcUsername = _srcUsername || '';
-        const dstUsername = _dstUsername || '';
+    // ── Modal de confirmacao ────────────────────────────────────────────────
+    let lastFocused = null;
 
-        const typed = prompt(T.confirm_prompt.replace('%s', srcUsername).replace('%s', dstUsername));
-        if (typed === null) return;
+    function openModal() {
+        lastFocused = document.activeElement;
 
-        if (typed.trim() !== srcUsername) {
-            showResult('error', T.wrong_confirm, [T.confirm_mismatch]);
+        document.getElementById('confirm-src').textContent      = formatUser({ username: _srcUsername });
+        document.getElementById('confirm-dst').textContent      = formatUser({ username: _dstUsername });
+        document.getElementById('confirm-total').textContent    = _total + ' ' + T.objects_to_migrate;
+        document.getElementById('confirm-expected').textContent = _srcUsername;
+
+        modalInput.value      = '';
+        modalError.textContent = '';
+        modalOk.disabled       = true;
+
+        modal.classList.add('open');
+        modalInput.focus();
+    }
+
+    function closeModal() {
+        modal.classList.remove('open');
+        if (lastFocused) { lastFocused.focus(); }
+    }
+
+    modalInput.addEventListener('input', function () {
+        modalOk.disabled       = modalInput.value.trim() !== _srcUsername;
+        modalError.textContent = '';
+    });
+
+    modalInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !modalOk.disabled) { e.preventDefault(); modalOk.click(); }
+    });
+
+    modalCancel.addEventListener('click', closeModal);
+
+    modal.addEventListener('click', function (e) { if (e.target === modal) { closeModal(); } });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && modal.classList.contains('open')) { closeModal(); }
+    });
+
+    btnExecute.addEventListener('click', openModal);
+
+    modalOk.addEventListener('click', function () {
+        if (modalInput.value.trim() !== _srcUsername) {
+            modalError.textContent = T.confirm_mismatch;
             return;
         }
 
-        btnExecute.disabled = true;
-        btnExecute.textContent = T.migrating;
-        btnCancel.disabled = true;
-
-        post('usermigrate.execute', { userid_src: selSrc.value, userid_dst: selDst.value })
-        .then(function (data) {
-            divPreview.style.display = 'none';
-            btnExecute.disabled = false;
-            btnExecute.textContent = T.confirm_btn;
-            btnCancel.disabled = false;
-
-            if (data.error) {
-                showResult('error', data.error.title, data.error.messages || []);
-            } else {
-                showResult('success', data.success.title, data.success.messages || []);
-                selSrc.value = ''; selDst.value = '';
-                srcBadgeWrap.style.display = 'none';
-                dstBadgeWrap.style.display = 'none';
-                syncPreviewButton();
-            }
-        })
-        .catch(function (err) {
-            btnExecute.disabled = false;
-            btnExecute.textContent = T.confirm_btn;
-            btnCancel.disabled = false;
-            showResult('error', T.server_error, [err.message]);
-        });
+        closeModal();
+        execute();
     });
 
+    function execute() {
+        btnExecute.disabled    = true;
+        btnExecute.textContent = T.migrating;
+        btnCancel.disabled     = true;
+
+        post('usermigrate.execute', { userid_src: selSrc.value, userid_dst: selDst.value })
+            .then(function (data) {
+                divPreview.style.display = 'none';
+                btnExecute.disabled      = false;
+                btnExecute.textContent   = T.confirm_btn;
+                btnCancel.disabled       = false;
+
+                if (data.error) {
+                    showResult('error', data.error.title, data.error.messages || []);
+                    return;
+                }
+
+                showResult('success', data.success.title, data.success.messages || []);
+
+                selSrc.value = '';
+                selDst.value = '';
+                srcBadgeWrap.style.display = 'none';
+                dstBadgeWrap.style.display = 'none';
+                syncState();
+                divResult.style.display = '';
+            })
+            .catch(function (err) {
+                btnExecute.disabled    = false;
+                btnExecute.textContent = T.confirm_btn;
+                btnCancel.disabled     = false;
+                showResult('error', T.server_error, [err.message]);
+            });
+    }
+
+    // ── Resultado ───────────────────────────────────────────────────────────
     function showResult(type, title, messages) {
         if (type === 'success') {
-            // Separa itens migrados do total (ultima linha)
-            const items = messages.filter((m, i) => i < messages.length - 1 && m);
+            const items = messages.filter(function (m, i) { return i < messages.length - 1 && m; });
             const total = messages[messages.length - 1] || '';
 
-            // Badges coloridos para cada entidade migrada
-            const badgesHtml = items.length
-                ? '<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">' +
-                  items.map(m => '<span style="background:#155724;color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">✔ ' + escHtml(m) + '</span>').join('') +
-                  '</div>'
-                : '';
-
-            const totalHtml = total
-                ? '<div style="margin-top:12px;padding-top:10px;border-top:1px solid #a3cfbb;font-size:13px;font-weight:700;color:#0a4f2e">' + escHtml(total) + '</div>'
-                : '';
-
             divResult.innerHTML =
-                '<div style="background:#d1e7dd;border:1px solid #a3cfbb;border-radius:6px;padding:18px 20px;margin-top:16px">' +
-                '<div style="display:flex;align-items:center;gap:10px;font-size:15px;font-weight:700;color:#0a4f2e">' +
-                '<span style="font-size:20px">✔</span>' + escHtml(title) +
-                '</div>' +
-                badgesHtml +
-                totalHtml +
-                '</div>';
-        } else {
-            const msgs = messages.length
-                ? '<ul style="margin:8px 0 0 18px;padding:0">' +
-                  messages.map(m => '<li style="margin:4px 0;font-size:13px">' + escHtml(m) + '</li>').join('') +
-                  '</ul>'
-                : '';
-            divResult.innerHTML =
-                '<div style="background:#f8d7da;border:1px solid #f1aeb5;border-radius:6px;padding:18px 20px;margin-top:16px">' +
-                '<div style="display:flex;align-items:center;gap:10px;font-size:15px;font-weight:700;color:#58151c">' +
-                '<span style="font-size:20px">✖</span>' + escHtml(title) +
-                '</div>' + msgs +
+                '<div class="zbx-migrate-result zbx-migrate-result-ok">' +
+                    '<div class="zbx-migrate-result-title"><span aria-hidden="true">&#10004;</span>' + escHtml(title) + '</div>' +
+                    (items.length
+                        ? '<div class="zbx-migrate-result-badges">' +
+                          items.map(function (m) { return '<span>&#10004; ' + escHtml(m) + '</span>'; }).join('') +
+                          '</div>'
+                        : '') +
+                    (total ? '<div class="zbx-migrate-result-total">' + escHtml(total) + '</div>' : '') +
                 '</div>';
         }
+        else {
+            divResult.innerHTML =
+                '<div class="zbx-migrate-result zbx-migrate-result-err">' +
+                    '<div class="zbx-migrate-result-title"><span aria-hidden="true">&#10006;</span>' + escHtml(title) + '</div>' +
+                    (messages.length
+                        ? '<ul>' + messages.map(function (m) { return '<li>' + escHtml(m) + '</li>'; }).join('') + '</ul>'
+                        : '') +
+                '</div>';
+        }
+
         divResult.style.display = '';
         divResult.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function escHtml(str) {
-        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        return String(str === null || str === undefined ? '' : str)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
+
+    function escAttr(str) { return escHtml(str); }
+
+    // Estado inicial
+    hintSrc.textContent = T.showing_users.replace('%1$s', TOTAL_USERS).replace('%2$s', TOTAL_USERS);
+    hintDst.textContent = hintSrc.textContent;
+    syncState();
 
 })();
 </script>

@@ -85,7 +85,14 @@ class CControllerUserMigrateExecute extends CController {
         }
 
         $migrated = [];
-        $errors    = [];
+        // Contador numerico proprio: extrair o total dos rotulos com regex
+        // ("2 permissão(ões)") quebra assim que uma traducao contiver digitos.
+        $total    = 0;
+
+        $track = function (string $label, int $count) use (&$migrated, &$total): void {
+            $migrated[] = $label;
+            $total     += $count;
+        };
 
         DBstart();
 
@@ -93,7 +100,7 @@ class CControllerUserMigrateExecute extends CController {
             // ── 1. Dashboards (ownership) ───────────────────────────────────
             $count = $this->migrateSimple('dashboard', 'userid',
                 'templateid IS NULL AND userid=' . zbx_dbstr($src), $dst);
-            if ($count > 0) $migrated[] = I18n::get()('mig_dashboards', $count);
+            if ($count > 0) $track(I18n::get()('mig_dashboards', $count), $count);
 
             // ── 2. Dashboard (permissoes) — evita duplicatas via JOIN ────────
             DBexecute(
@@ -104,12 +111,12 @@ class CControllerUserMigrateExecute extends CController {
             );
             $count = $this->migrateSimple('dashboard_user', 'userid',
                 'userid=' . zbx_dbstr($src), $dst);
-            if ($count > 0) $migrated[] = I18n::get()('mig_dash_perms', $count);
+            if ($count > 0) $track(I18n::get()('mig_dash_perms', $count), $count);
 
             // ── 3. Mapas de rede (ownership) ───────────────────────────────
             $count = $this->migrateSimple('sysmaps', 'userid',
                 'userid=' . zbx_dbstr($src), $dst);
-            if ($count > 0) $migrated[] = I18n::get()('mig_maps', $count);
+            if ($count > 0) $track(I18n::get()('mig_maps', $count), $count);
 
             // ── 4. Mapas de rede (permissoes) — evita duplicatas via JOIN ───
             DBexecute(
@@ -120,12 +127,12 @@ class CControllerUserMigrateExecute extends CController {
             );
             $count = $this->migrateSimple('sysmap_user', 'userid',
                 'userid=' . zbx_dbstr($src), $dst);
-            if ($count > 0) $migrated[] = I18n::get()('mig_map_perms', $count);
+            if ($count > 0) $track(I18n::get()('mig_map_perms', $count), $count);
 
             // ── 5. Relatorios ───────────────────────────────────────────────
             $count = $this->migrateSimple('report', 'userid',
                 'userid=' . zbx_dbstr($src), $dst);
-            if ($count > 0) $migrated[] = I18n::get()('mig_reports', $count);
+            if ($count > 0) $track(I18n::get()('mig_reports', $count), $count);
 
             // ── 6. Relatorios (destinatarios) — evita duplicatas via JOIN ───
             DBexecute(
@@ -136,22 +143,22 @@ class CControllerUserMigrateExecute extends CController {
             );
             $count = $this->migrateSimple('report_user', 'userid',
                 'userid=' . zbx_dbstr($src), $dst);
-            if ($count > 0) $migrated[] = I18n::get()('mig_report_recips', $count);
+            if ($count > 0) $track(I18n::get()('mig_report_recips', $count), $count);
 
             // ── 7. Midias de notificacao ────────────────────────────────────
             $count = $this->migrateSimple('media', 'userid',
                 'userid=' . zbx_dbstr($src), $dst);
-            if ($count > 0) $migrated[] = I18n::get()('mig_media', $count);
+            if ($count > 0) $track(I18n::get()('mig_media', $count), $count);
 
             // ── 8. Action operations ────────────────────────────────────────
             $count = $this->migrateSimple('opmessage_usr', 'userid',
                 'userid=' . zbx_dbstr($src), $dst);
-            if ($count > 0) $migrated[] = I18n::get()('mig_action_recips', $count);
+            if ($count > 0) $track(I18n::get()('mig_action_recips', $count), $count);
 
             // ── 9. API Tokens ───────────────────────────────────────────────
             $count = $this->migrateSimple('token', 'userid',
                 'userid=' . zbx_dbstr($src), $dst);
-            if ($count > 0) $migrated[] = I18n::get()('mig_tokens', $count);
+            if ($count > 0) $track(I18n::get()('mig_tokens', $count), $count);
 
             // ── 10. Grupos — INSERT apenas dos que o destino nao tem ────────
             // id em users_groups NAO e auto_increment — gera manualmente
@@ -180,15 +187,24 @@ class CControllerUserMigrateExecute extends CController {
                     $added_groups++;
                 }
             }
-            if ($added_groups > 0) $migrated[] = I18n::get()('mig_groups', $added_groups);
+            if ($added_groups > 0) $track(I18n::get()('mig_groups', $added_groups), $added_groups);
 
-            // ── 11. Preferencias de interface — UPDATE em batch
-            DBexecute(
-                'UPDATE profiles p SET p.userid=' . zbx_dbstr($dst) .
-                ' WHERE p.userid=' . zbx_dbstr($src) .
-                ' AND p.idx NOT IN (SELECT idx FROM (SELECT idx FROM profiles WHERE userid=' . zbx_dbstr($dst) . ') AS dst_idx)'
-            );
-            $migrated[] = I18n::get()('mig_prefs');
+            // ── 11. Preferencias de interface — UPDATE em batch ─────────────
+            // So migra as chaves (idx) que o destino ainda nao tem; as do
+            // destino sao preservadas. Conta antes para o total bater com o
+            // preview e para nao reportar sucesso quando nada foi movido.
+            $prefs_where = 'p.userid=' . zbx_dbstr($src) .
+                ' AND p.idx NOT IN (SELECT idx FROM (SELECT idx FROM profiles WHERE userid=' .
+                zbx_dbstr($dst) . ') AS dst_idx)';
+
+            $count = (int) (DBfetch(DBselect(
+                'SELECT COUNT(*) AS cnt FROM profiles p WHERE ' . $prefs_where
+            ))['cnt'] ?? 0);
+
+            if ($count > 0) {
+                DBexecute('UPDATE profiles p SET p.userid=' . zbx_dbstr($dst) . ' WHERE ' . $prefs_where);
+                $track(I18n::get()('mig_prefs', $count), $count);
+            }
 
             // ── 12. Plantao — Phones ────────────────────────────────────────
             if ($this->tableExists('module_plantao_phones')) {
@@ -205,7 +221,7 @@ class CControllerUserMigrateExecute extends CController {
                         'UPDATE module_plantao_phones SET userid=' . zbx_dbstr($dst) .
                         ' WHERE userid=' . zbx_dbstr($src)
                     );
-                    $migrated[] = count($phones) . ' telefone(s) de plantão';
+                    $track(I18n::get()('mig_phones', count($phones)), count($phones));
                 } elseif ($phones && $dst_phone) {
                     // Destino ja tem registro — apenas remove o origem
                     DBexecute('DELETE FROM module_plantao_phones WHERE userid=' . zbx_dbstr($src));
@@ -216,7 +232,7 @@ class CControllerUserMigrateExecute extends CController {
             if ($this->tableExists('module_plantao_schedule')) {
                 $count = $this->migrateSimple('module_plantao_schedule', 'userid',
                     'userid=' . zbx_dbstr($src), $dst);
-                if ($count > 0) $migrated[] = I18n::get()('mig_schedules', $count);
+                if ($count > 0) $track(I18n::get()('mig_schedules', $count), $count);
             }
 
             // ── Auditoria no formato nativo do Zabbix ───────────────────────
@@ -245,7 +261,7 @@ class CControllerUserMigrateExecute extends CController {
             $this->setResponse(new CControllerResponseData([
                 'main_block' => json_encode([
                     'success' => [
-                        'title'    => "Migração concluída: {$user_src['username']} → {$user_dst['username']}",
+                        'title'    => I18n::get()('migration_success', $user_src['username'], $user_dst['username']),
                         'messages' => [I18n::get()('no_objects_found')]
                     ]
                 ])
@@ -254,8 +270,8 @@ class CControllerUserMigrateExecute extends CController {
         }
 
         // Monta resumo detalhado por categoria
-        $summary_lines = $migrated;
-        $summary_lines[] = I18n::get()('migration_total', array_sum(array_map(fn($m) => (int)preg_replace('/[^0-9]/', '', $m), $migrated)));
+        $summary_lines   = $migrated;
+        $summary_lines[] = I18n::get()('migration_total', $total);
 
         $this->setResponse(new CControllerResponseData([
             'main_block' => json_encode([

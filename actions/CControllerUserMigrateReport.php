@@ -3,11 +3,13 @@
 namespace Modules\UserMigrate\Actions;
 
 require_once __DIR__ . '/../locale/I18n.php';
+require_once __DIR__ . '/../include/AuthResolver.php';
+
 use Modules\UserMigrate\I18n;
+use Modules\UserMigrate\AuthResolver;
 
 use CController;
 use CControllerResponseData;
-use CRoleHelper;
 
 class CControllerUserMigrateReport extends CController {
 
@@ -31,30 +33,16 @@ class CControllerUserMigrateReport extends CController {
     }
 
     protected function doAction(): void {
-        $users = DBfetchArray(DBselect(
-            'SELECT u.userid, u.username, u.name, u.surname,' .
-            ' COALESCE(MAX(g.gui_access), 0) AS gui_access' .
-            ' FROM users u' .
-            ' LEFT JOIN users_groups ug ON ug.userid = u.userid' .
-            ' LEFT JOIN usrgrp g ON g.usrgrpid = ug.usrgrpid' .
-            ' GROUP BY u.userid, u.username, u.name, u.surname' .
-            ' ORDER BY u.username ASC'
-        ));
+        // Metodo de autenticacao resolvido em AuthResolver
+        // (userdirectory > gui_access > default do sistema).
+        $users = AuthResolver::fetchUsers();
 
         $report    = null;
         $user_info = null;
         $userid    = $this->getInput('userid', '');
 
         if ($userid) {
-            $user_info = DBfetch(DBselect(
-                'SELECT u.userid, u.username, u.name, u.surname,' .
-                ' COALESCE(MAX(g.gui_access), 0) AS gui_access' .
-                ' FROM users u' .
-                ' LEFT JOIN users_groups ug ON ug.userid = u.userid' .
-                ' LEFT JOIN usrgrp g ON g.usrgrpid = ug.usrgrpid' .
-                ' WHERE u.userid=' . zbx_dbstr($userid) .
-                ' GROUP BY u.userid, u.username, u.name, u.surname'
-            ));
+            $user_info = AuthResolver::fetchUser($userid);
 
             if ($user_info) {
                 $report = $this->buildReport($userid);
@@ -174,7 +162,7 @@ class CControllerUserMigrateReport extends CController {
             'icon'        => '⚡',
             'count'       => count($rows),
             'description' => I18n::get()('action_desc'),
-            'items'       => array_map(fn($r) => 'Operation ID: ' . $r['operationid'], $rows)
+            'items'       => array_map(fn($r) => I18n::get()('operation_id_label', $r['operationid']), $rows)
         ];
 
         // API Tokens
