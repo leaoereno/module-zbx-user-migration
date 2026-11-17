@@ -1,6 +1,7 @@
 <?php
 return [
     // Page titles
+    'User Migration Assistant'          => 'User Migration Assistant',
     'User Migration'                    => 'User Migration',
     'User Objects Report'               => 'User Objects Report',
 

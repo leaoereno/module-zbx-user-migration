@@ -1,8 +1,11 @@
 # module-zbx-user-migration
 
-Modulo para **Zabbix 7.0 LTS** que adiciona o menu **Users > User Migration**,
-permitindo transferir todos os objetos vinculados a um usuario local para um usuario
-provisionado via LDAP, SAML ou qualquer outro IdP, sem manipulacao manual de banco.
+Modulo para **Zabbix 7.0 LTS** que adiciona o menu **Users > User Migration Assistant**
+("Assistente de migração de usuário" quando o Zabbix esta em portugues), com as
+entradas **User Migration** e **User Objects Report**, permitindo transferir todos os
+objetos vinculados a um usuario local para um usuario provisionado via LDAP, SAML ou
+qualquer outro IdP, sem manipulacao manual de banco. A interface acompanha
+automaticamente o idioma escolhido pelo usuario no Zabbix (ingles ou portugues).
 
 > **Compatibilidade de banco:** MySQL 8.0+ e MariaDB 10.5+.
 > PostgreSQL nao e suportado nesta versao.
@@ -196,7 +199,8 @@ Estrutura esperada apos instalacao:
 2. **Administracao > Geral > Modulos**
 3. Clique em **"Verificar modulos ausentes"**
 4. Habilite **"User Migration"**
-5. O menu **Users > User Migration** aparece na navegacao lateral
+5. O menu **Users > User Migration Assistant > User Migration / User Objects Report**
+   aparece na navegacao lateral
 
 ---
 
@@ -215,7 +219,7 @@ tail -f /var/log/httpd/error_log | grep -i "usermigrate\|fatal"
 ```
 
 Apos habilitar:
-- Navegue a **Users > User Migration**
+- Navegue a **Users > User Migration Assistant > User Migration**
 - Selecione origem e destino — as etiquetas mostram o metodo real de cada lado
   (LOCAL / LDAP / SAML), o nome do provedor e se o usuario e provisionado via JIT
 - Clique em **"Verificar o que sera migrado"** — lista preview sem alterar nada
@@ -337,7 +341,7 @@ LIMIT 10;
 ```
 module-zbx-user-migration/
 |-- manifest.json               Declara o modulo e as 3 actions
-|-- Module.php                  Registra views e menu Users > User Migration
+|-- Module.php                  Registra views e menu Users > User Migration Assistant
 |-- install.sh                  Copia arquivos e ajusta permissoes
 |-- include/
 |   |-- AuthResolver.php

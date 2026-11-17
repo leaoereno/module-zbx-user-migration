@@ -2,6 +2,8 @@
 
 namespace Modules\UserMigrate;
 
+require_once __DIR__ . '/locale/I18n.php';
+
 use Zabbix\Core\CModule;
 use APP;
 use CMenuItem;
@@ -23,13 +25,25 @@ class Module extends CModule {
             return;
         }
 
+        // Traducao via I18n proprio do modulo (nao usar a _() nativa do Zabbix:
+        // ela so resolve strings que existem no catalogo .po do core, entao as
+        // labels deste modulo nunca seriam traduzidas por ela).
+        $t = I18n::get();
+
         $menu = APP::Component()->get('menu.main');
 
-        $migrationItem = (new CMenuItem(_('User Migration')))
+        $migrationItem = (new CMenuItem($t('User Migration')))
             ->setAction('usermigrate.view');
 
-        $reportItem = (new CMenuItem(_('User Objects Report')))
+        $reportItem = (new CMenuItem($t('User Objects Report')))
             ->setAction('usermigrate.report');
+
+        // Agrupa as duas entradas sob um unico item "Assistente de migração de usuário"
+        // (nome do modulo), em vez de duas entradas soltas direto em "Usuários".
+        $assistantMenuItem = new CMenuItem($t('User Migration Assistant'));
+        $assistantMenuItem->getSubMenu()
+            ->add($migrationItem)
+            ->add($reportItem);
 
         // O Zabbix registra o menu "Usuários" com setId('users-menu') e setIcon(ZBX_ICON_USERS)
         // dentro de CMenuHelper. Buscar por esse id é o único jeito confiável de encontrar
@@ -46,17 +60,17 @@ class Module extends CModule {
         if ($usersMenuItem !== null) {
             // Encontrou o item nativo — preserva ícone ZBX_ICON_USERS já definido
             $usersMenuItem->getSubMenu()
-                ->add($migrationItem)
-                ->add($reportItem);
+                ->add($assistantMenuItem);
         }
         else {
             // Fallback: cria o item com ícone explícito
             // (não deve ocorrer em instalação Zabbix 7.0 padrão)
+            // "Users" aqui é o label nativo do Zabbix (catalogo .po do core),
+            // por isso usa a _() nativa e não o $t() deste módulo.
             $menu->findOrAdd(_('Users'))
                 ->setIcon(ZBX_ICON_USERS)
                 ->getSubMenu()
-                ->add($migrationItem)
-                ->add($reportItem);
+                ->add($assistantMenuItem);
         }
     }
 }
