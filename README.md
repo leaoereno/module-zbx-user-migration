@@ -1,7 +1,7 @@
 # module-zbx-user-migration
 
 Modulo para **Zabbix 7.0 LTS** que adiciona o menu **Users > User Migration Assistant**
-("Assistente de migração de usuário" quando o Zabbix esta em portugues), com as
+("Auxiliar de migração de usuário" quando o Zabbix esta em portugues), com as
 entradas **User Migration** e **User Objects Report**, permitindo transferir todos os
 objetos vinculados a um usuario local para um usuario provisionado via LDAP, SAML ou
 qualquer outro IdP, sem manipulacao manual de banco. A interface acompanha
